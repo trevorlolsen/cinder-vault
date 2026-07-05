@@ -1,0 +1,10 @@
+# Ignore all top-level entries by default...
+/*
+
+# ...then re-include only what the site needs:
+!/index.html
+!/assets/
+!/assets/**
+!/.gitignore
+!/.nojekyll
+!/README.md
