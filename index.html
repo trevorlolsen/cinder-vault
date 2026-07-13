@@ -1219,7 +1219,7 @@
       },
       'recover': {
         id: 'recover', name: 'Second Wind', cost: 1, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.UNCOMMON,
-        target: 'SELF', values: { might: 1 },
+        target: 'SELF',
         desc: (up) => `Gain ${up ? 2 : 1} Warded (+block whenever you gain block).`,
         custom: (game, target, card) => {
           applyPlayerStatus(game, game.combat.player, 'warded', (card && card.upgraded) ? 2 : 1);
@@ -1432,7 +1432,7 @@
       'grave-summoner': {
         id: 'grave-summoner', name: 'Grave Summoner', maxHp: 58,
         getIntent: (enemy, combat) => {
-          const turn = enemy.intentIndex++ || 0;
+          const turn = enemy.intentIndex++;
           const aliveAdds = combat.enemies.filter(e => e.alive).length;
           if (turn % 3 === 1 && aliveAdds < 4) return { type: 'SUMMON', enemyId: turn % 2 === 0 ? 'wraith' : 'ashhound', value: 1 };
           return parseIntentToken(turn % 3 === 2 ? 'SAPPED2' : 'ATK10');
@@ -1465,7 +1465,7 @@
         id: 'bonelord', name: 'The Bonelord', maxHp: 180, isBoss: true,
         getIntent: (enemy) => {
           const enraged = enemy.hp <= enemy.maxHp * 0.5;
-          const turn = enemy.intentIndex++ || 0;
+          const turn = enemy.intentIndex++;
           const loop = enraged ? ['BUFF_MIGHT3', 'ATK24', 'EXPOSED3', 'ATK36'] : ['ATK18', 'ATK18', 'EXPOSED3', 'ATK30'];
           return parseIntentToken(loop[turn % loop.length]);
         }
@@ -1473,7 +1473,7 @@
       'archlich': {
         id: 'archlich', name: 'Arch-Lich Azaroth', maxHp: 200, isBoss: true,
         getIntent: (enemy) => {
-          const turn = enemy.intentIndex++ || 0;
+          const turn = enemy.intentIndex++;
           if (turn % 6 === 4) return { type: 'ADD_CURSE', cardId: 'curse-doubt', value: 1 };
           const loop = enemy.hp <= enemy.maxHp * 0.5
             ? ['BLIGHT7', 'ATK-ALL15', 'BUFF_MIGHT4', 'ATK24']
@@ -1945,11 +1945,31 @@
       try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
     }
 
+    // True while a headless autoplay/smoke run is driving the game; blocks the
+    // real save file and meta stats from being touched by simulated runs.
+    let _headless = false;
+
     function saveGame(game) {
+      if (_headless) return;
       if (!game || !game.run || game.screen === SCREENS.MENU || game.screen === SCREENS.VICTORY || game.screen === SCREENS.GAMEOVER) return;
       try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 2, rngState: _rngState, savedAt: Date.now(), state: game }));
+        localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 3, rngState: _rngState, savedAt: Date.now(), state: game }));
       } catch (e) {}
+    }
+
+    // Fills defaults for fields added after older save versions. Content ids are
+    // never renamed or removed across versions, so decks/relics load as-is.
+    function migrateSave(game) {
+      if (!game || !game.run) return game;
+      const run = game.run;
+      if (!run.characterId) {
+        const match = Object.values(CHARACTERS_DB).find(c => c.name === run.characterName);
+        run.characterId = match ? match.id : 'cinder-knight';
+      }
+      if (run.removalsThisRun == null) run.removalsThisRun = 0;
+      if (!run.seenEventIds) run.seenEventIds = [];
+      if (game.act == null) game.act = 1;
+      return game;
     }
 
     function rehydrateState(game) {
@@ -1971,8 +1991,8 @@
     function loadGame() {
       try {
         const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
-        if (!saved || !saved.state || saved.version !== 2) return false;
-        STATE = rehydrateState(saved.state);
+        if (!saved || !saved.state || saved.version < 2 || saved.version > 3) return false;
+        STATE = rehydrateState(migrateSave(saved.state));
         _rngState = saved.rngState || STATE.seed || 1;
         render();
         return true;
@@ -1980,6 +2000,7 @@
     }
 
     function recordRunResult(game, won) {
+      if (_headless) return;
       try {
         const meta = loadMeta();
         if (won) meta.wins++; else meta.losses++;
@@ -2401,18 +2422,16 @@
     function drawCards(game, n) {
       let drew = 0;
       for (let i = 0; i < n; i++) {
+        // At the hand cap, stop drawing entirely — undrawn cards stay in the
+        // draw pile rather than being discarded (or worse, destroyed).
+        if (game.combat.hand.length >= LAYOUT.HAND_SIZE) break;
         if (game.combat.drawPile.length === 0) {
           game.combat.drawPile = shuffle(game.combat.discardPile);
           game.combat.discardPile = [];
           if (game.combat.drawPile.length === 0) break;
         }
-
-        if (game.combat.hand.length < LAYOUT.HAND_SIZE) {
-          game.combat.hand.push(game.combat.drawPile.shift());
-          drew++;
-        } else {
-          game.combat.drawPile.shift();
-        }
+        game.combat.hand.push(game.combat.drawPile.shift());
+        drew++;
       }
       if (drew > 0) AudioEngine.sfx('draw');
     }
@@ -2665,12 +2684,12 @@
       game.combat.log.push(`Combat won! Gained ${gold} gold.`);
 
       let relicId = null;
-      let maxHpGained = 0;
+      const maxHpBefore = game.run.maxHp;
       let eventRewardText = eventReward && eventReward.text ? eventReward.text : '';
       if (isElite) {
         relicId = getRandomRelic(game);
         if (relicId) grantRelic(game, relicId);
-        maxHpGained = gainMaxHp(game, 2, true);
+        gainMaxHp(game, 2, true);
       }
       if (eventReward) {
         if (eventReward.relicId === 'random') {
@@ -2680,13 +2699,17 @@
           grantRelic(game, eventReward.relicId);
           relicId = relicId || eventReward.relicId;
         }
-        if (eventReward.maxHp) maxHpGained += gainMaxHp(game, eventReward.maxHp, true);
+        if (eventReward.maxHp) gainMaxHp(game, eventReward.maxHp, true);
         fireNonCombatRelicHook(game, 'onEventComplete', { eventCombat: true, reward: eventReward });
         game.ui.eventRewardOverride = null;
       }
 
       // End-of-combat relic hooks (Prayer Beads, Hand of Greed, Vulture Feather, ...).
       fireRelicHook(game, 'onCombatEnd', { isElite, isBoss });
+
+      // Max-HP delta across the whole payout (elite bonus, event rewards, relic
+      // hooks like Vital Ember) so the reward banner reports the true total.
+      const maxHpGained = game.run.maxHp - maxHpBefore;
 
       if (isBoss) {
         recordRunResult(game, true);
@@ -2729,6 +2752,8 @@
       game.run.floor = 1;
       game.run.currentNodeId = null;
       game.run.seenEventIds = [];
+      // Each endless act resets the removal price ladder along with the economy.
+      game.run.removalsThisRun = 0;
       healRun(game, Math.floor(game.run.maxHp * 0.25), 'Endless respite');
       const bossPool = Object.values(ENEMIES_DB).filter(e => e.isBoss);
       game.run.bossId = pickOne(bossPool).id;
@@ -3228,7 +3253,7 @@
         <div class="screen menu-screen">
           <div class="menu-panel">
             <div class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</div>
-            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder</div>
+            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v6</div>
             ${saveButton}
             <div style="margin: 20px 0 10px; color: var(--text-muted);">Start a new run</div>
             ${characterButtons}
@@ -4157,6 +4182,12 @@
     }
 
     function autoplay(seed, floors, opts) {
+      _headless = true;
+      try { return _autoplayRun(seed, floors, opts); }
+      finally { _headless = false; }
+    }
+
+    function _autoplayRun(seed, floors, opts) {
       opts = opts || {};
       startNewRun({ seed: seed || 1, characterId: opts.characterId || 'cinder-knight', ascension: opts.ascension || 0 });
       goTo(SCREENS.MAP);
@@ -4168,19 +4199,24 @@
           if (!next) break;
           travelToNode(STATE, next);
         } else if (STATE.screen === SCREENS.COMBAT) {
-          let guard = 0;
-          while (STATE.screen === SCREENS.COMBAT && guard++ < 120) {
+          // A turn cap catches real soft-locks; the action cap catches infinite
+          // card loops. Draw-heavy decks legitimately play 8+ cards per turn, so
+          // actions must be far looser than turns. Attacks are preferred so the
+          // random player reliably closes out fights instead of block-cycling.
+          let turns = 0, actions = 0;
+          while (STATE.screen === SCREENS.COMBAT && turns < 60 && actions++ < 800) {
             const playable = STATE.combat.hand.filter(c => {
               const def = CARDS_DB[c.defId];
               return def && !def.unplayable && def.cost <= STATE.combat.energy;
             });
-            if (!playable.length) { endPlayerTurn(STATE); continue; }
-            const card = pickOne(playable);
+            if (!playable.length) { turns++; endPlayerTurn(STATE); continue; }
+            const attacks = playable.filter(c => CARDS_DB[c.defId].type === CARD_TYPES.ATTACK);
+            const card = (attacks.length && rand() < 0.7) ? pickOne(attacks) : pickOne(playable);
             const def = CARDS_DB[card.defId];
             const target = STATE.combat.enemies.find(e => e.alive);
             playCard(STATE, card.uid, def.target === 'ENEMY_SINGLE' && target ? target.uid : null);
           }
-          if (guard >= 120 && STATE.screen === SCREENS.COMBAT) throw new Error('Autoplay combat turn cap hit');
+          if (STATE.screen === SCREENS.COMBAT) throw new Error('Autoplay combat cap hit (turns=' + turns + ', actions=' + actions + ')');
         } else if (STATE.screen === SCREENS.CARD_REWARD) {
           selectCardReward(STATE, null);
         } else if (STATE.screen === SCREENS.REST) {
@@ -4209,6 +4245,34 @@
       return { screen: STATE.screen, floor: STATE.run.floor, hp: STATE.run.hp, gold: STATE.run.gold, steps };
     }
 
+    // Runs autoplay across every character (and optional ascension levels) for a
+    // set of seeds; returns per-character aggregate stats for balance review.
+    function autoplayAll(seeds, opts) {
+      opts = opts || {};
+      const seedList = Array.isArray(seeds) && seeds.length ? seeds : Array.from({ length: 10 }, (_, i) => i + 1);
+      const ascensions = Array.isArray(opts.ascensions) && opts.ascensions.length ? opts.ascensions : [0];
+      const results = {};
+      for (const characterId of Object.keys(CHARACTERS_DB)) {
+        const stats = { runs: 0, wins: 0, floors: [], errors: [] };
+        for (const ascension of ascensions) {
+          for (const seed of seedList) {
+            try {
+              const r = autoplay(seed, opts.floors, { characterId, ascension, maxSteps: opts.maxSteps });
+              stats.runs++;
+              if (r.screen === SCREENS.VICTORY) stats.wins++;
+              stats.floors.push(r.floor);
+            } catch (err) {
+              stats.errors.push({ seed, ascension, message: String((err && err.message) || err) });
+            }
+          }
+        }
+        stats.winRate = stats.runs ? +(stats.wins / stats.runs).toFixed(2) : 0;
+        stats.avgFloor = stats.floors.length ? +(stats.floors.reduce((a, b) => a + b, 0) / stats.floors.length).toFixed(1) : 0;
+        results[characterId] = stats;
+      }
+      return results;
+    }
+
     // Scale the fixed 1024x600 design stage to fill the viewport, preserving
     // aspect ratio (letterboxed). Recomputed on resize / orientation change.
     function fitStage() {
@@ -4229,6 +4293,7 @@
         loadGame,
         clearSave,
         autoplay,
+        autoplayAll,
         continueEndless: () => continueEndlessRun(STATE),
         startSeed: (seed, characterId, ascension) => { startNewRun({ seed, characterId: characterId || 'cinder-knight', ascension: ascension || 0 }); goTo(SCREENS.MAP); }
       };
