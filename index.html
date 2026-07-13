@@ -1016,7 +1016,10 @@
       exposed: { label: 'Exposed', short: 'Exp', desc: 'Incoming damage is increased.' },
       mending: { label: 'Mending', short: 'Mend', desc: 'Heals at the start of turn, then decays.' },
       blight: { label: 'Blight', short: 'Blt', desc: 'Takes damage at the start of turn, then decays.' },
-      warded: { label: 'Warded', short: 'Ward', desc: 'Adds extra block whenever block is gained.' }
+      warded: { label: 'Warded', short: 'Ward', desc: 'Adds extra block whenever block is gained.' },
+      grace: { label: 'Grace', short: 'Grc', desc: 'Gain that much Block at the start of each turn.' },
+      brittle: { label: 'Brittle', short: 'Brt', desc: 'Block gained is reduced by 25%. Decays each turn.' },
+      aegis: { label: 'Aegis', short: 'Aeg', desc: 'Negates the next debuff applied. One stack per debuff.' }
     };
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
@@ -1040,12 +1043,16 @@
       "int-curse": "M259.125 16.938 216.22 128.094 97.343 164.25l106.53-4.22-36.436 94.407L270.156 106.25l50.22 64.406-61.25-153.72zm50.406 63.687 36.376 102.28-102.344-6.75 172.063 53.876-46.5 67.126 128.47-104.28-116.94-7.69-71.124-104.56zm-123.467 98.97L20.97 190.437l87.936 71.375-.375 127.125 27.75-104.907 82.345 66.845L109.345 207.5l76.718-27.906zm71.156 18.968c-22.404 0-44.817 25.943-67.22 77.875 43.462 77.53 88.133 86.365 134.438 0-22.403-51.93-44.816-77.875-67.22-77.875zm.405 15.687c11.05 8.62 19 30.54 19 56.438 0 25.896-7.95 47.818-19 56.437-11.05-8.62-19-30.54-19-56.438 0-25.896 7.95-47.818 19-56.437zm82.53 10.594 5.19 180.22L266.75 383l140.47 87.438-30.408-111.313 73.563-103.47-82.875 69.376-27.344-100.186zM152.94 309.03l-43.594 159.595 98.906-61.53 120.656 39.436-90.5-58.217 87.094-54.188-171.22 56.53-1.343-81.624z",
       "int-summon": "M254.885 21.08c-31.185 0-58.496 32.517-58.496 75.092 0 42.575 27.31 75.09 58.495 75.09 31.186 0 58.498-32.515 58.498-75.09S286.07 21.08 254.885 21.08zm-32.262 52.078h18.69v45.723h-18.69V73.16zm43.803 0h18.69v45.723h-18.69V73.16zm43.943 88.28c-13.86 17.468-33.346 28.51-55.485 28.51-21.33 0-40.192-10.257-53.938-26.626-11.126 4.16-20.024 11.688-27.67 22.285-9.668 13.403-16.88 31.75-21.923 52.71-4.735 19.677-7.546 41.513-9.202 63.61 7.876 4.015 14.466 9.84 19.61 16.782 6.746 9.102 11.316 19.966 14.56 31.75 3.395-11.403 7.95-21.896 14.324-30.75 5.08-7.054 11.502-13.04 19.155-17.183-4.61-9.605-7.21-20.688-7.21-32.29 0-34.46 22.86-64.393 53.572-64.393 30.713 0 53.572 29.934 53.572 64.392 0 10.913-2.3 21.368-6.408 30.565 8.922 4.012 16.312 10.29 21.96 17.91 6.942 9.368 11.577 20.603 14.837 32.784 3.426-11.803 8.064-22.662 14.633-31.785 4.46-6.194 9.956-11.564 16.41-15.587-1.083-23.328-3.275-46.454-7.752-67.144-4.568-21.113-11.505-39.48-21.326-52.777-8.29-11.223-18.313-18.974-31.72-22.764zM89.95 224.532c-16.32 0-31.497 15.67-34.386 37.99H79.81v18.687H56.083c3.874 20.57 18.353 34.73 33.867 34.73 15.513 0 29.992-14.16 33.866-34.73H98.5V262.52h25.834c-2.888-22.32-18.066-37.99-34.385-37.99zm166.212 0c-16.32 0-31.496 15.67-34.385 37.99h24.16v18.687h-23.642c2.92 15.51 11.873 27.37 22.75 32.27-6.347.482-12.23 1.242-17.117 2.2l-.028.007-.027.005c-9.335 1.772-16.13 6.7-22.06 14.937-5.93 8.236-10.528 19.833-13.745 33.25-5.746 23.972-7.066 53.275-7.297 79.29h23.503V392.12h18.69v103.025h61.906V392.12h18.687v51.048h21.91c-.044-26.343-.5-56.035-5.776-80.164-2.947-13.486-7.4-25.042-13.42-33.166-6.02-8.124-13.142-13.033-23.68-14.682l-.194-.03-.19-.038c-5.24-1.045-11.492-1.713-18.09-2.01 10.496-5.12 19.068-16.76 21.913-31.87h-25.403V262.52h25.92c-2.888-22.32-18.066-37.99-34.385-37.99zm165.992 0c-16.32 0-31.496 15.67-34.384 37.99h24.296v18.687h-23.78c3.875 20.57 18.354 34.73 33.868 34.73 15.514 0 29.993-14.16 33.867-34.73h-25.266V262.52h25.785c-2.89-22.32-18.066-37.99-34.386-37.99zm-294.564 91.6c-9.507 11.333-22.63 18.493-37.64 18.493-13.795 0-25.996-6.05-35.263-15.824-4.983 2.6-9.165 6.523-12.984 11.827-5.93 8.236-10.528 19.833-13.744 33.25-5.747 23.972-7.067 53.275-7.298 79.29h23.252V392.12h18.688v103.025h61.906V392.12h18.69v51.048h22.745c-.043-26.342-.5-56.035-5.775-80.164-2.948-13.486-7.4-25.042-13.422-33.166-5.115-6.902-11.032-11.474-19.156-13.707zm331.344 1.013c-9.432 10.746-22.22 17.48-36.78 17.48-14.395 0-27.065-6.574-36.465-17.11-6.246 2.505-11.26 6.852-15.768 13.114-5.93 8.236-10.528 19.833-13.744 33.25-5.747 23.972-7.066 53.275-7.297 79.29h22.927V392.12h18.69v103.025H452.4V392.12h18.688v51.048h22.498c-.018-26.37-.353-56.076-5.504-80.21-2.88-13.486-7.266-25.037-13.23-33.147-4.393-5.972-9.388-10.195-15.92-12.667z",
       "int-unknown": "M257.78 19.438c-127.92.016-231.75 103.855-231.75 231.78 0 55.734 19.71 106.776 52.532 146.72L57.75 434.094h132.406l-66.312-114.72-22.375 39c-20.9-30.478-33.064-67.442-33.064-107.155 0-104.523 84.854-189.376 189.375-189.376 104.523 0 189.408 84.853 189.408 189.375 0 39.108-11.68 75.664-32 105.874l-21.875-37.72L327 434.095h132.406l-21.594-37.47c32.225-39.78 51.75-90.253 51.75-145.405 0-127.927-103.827-231.766-231.75-231.782h-.03zm-.655 75.468c-49.528-.047-110.474 29.232-128.406 104.938l60.75 14.312c26.965-76.242 90.87-70.824 113.31-28.625 26.775 50.346-89.687 107.283-84.124 190.407h77.688c6.49-98.144 118.973-123.49 59.562-229.53C337.963 114.38 301 96.572 261.876 95.03V95a124.446 124.446 0 0 0-4.75-.094zM258.5 395.97a48.45 48.45 0 0 0-48.594 48.592 48.452 48.452 0 0 0 48.594 48.594 48.452 48.452 0 0 0 48.594-48.594 48.452 48.452 0 0 0-48.594-48.593z",
+      "int-brittle": "M45.906 23.625v9.344c0 102.68 10.49 205.087 41.125 288.155 30.637 83.068 82.364 147.415 163.75 169.78l2.22.626 2.22-.5C344.49 472 396.864 407.39 425.593 323.47c28.728-83.92 35.25-187.777 35.25-290.5v-9.345H45.906zM64.72 42.313h377.34c-.413 98.8-7.497 197.342-34.125 275.125-27.21 79.487-73.39 136.637-154.375 154.78-73.28-21.03-119.914-78.696-149-157.562-28.475-77.212-39.206-174.13-39.843-272.344zm18.81 18.75c.807 84.13 12.486 172.823 39.314 244.812 7.825 20.998 16.874 40.495 27.25 58.063l45.844-38.438-40.75-75.063-5.47-10.062 10.97-3.344s38.865-11.786 60.406-18.25l20.437-7.25-94.843-150.468H83.53zm160.25 0 45.782 91.5 132.407-43.157c.69-16.205 1.053-32.366 1.155-48.344H243.78zm177.157 68.343L298.031 169.47l24.908 49.78 25.875 48.72 53.28-1.845c10.245-42.834 16.03-89.664 18.844-136.72zM310.908 236.47l-30.75 10.374 67.25 145.187c17.813-23.2 31.737-51.6 42.624-83.686 2.578-7.595 4.966-15.39 7.19-23.344l-53.626 1.844-5.844.22-2.75-5.158-24.094-45.437zm-99.22 4.686c-13.133 3.972-27.346 8.262-34.625 10.47L216 323.28l3.625 6.72-5.844 4.906-53.56 44.906c24.67 35.91 55.887 61.828 94.655 73.125 30.34-6.91 55.36-21.496 76.03-42.062L211.69 241.155z",
       "st-might": "M165.906 18.688C15.593 59.28-42.187 198.55 92.72 245.375h-1.095c.635.086 1.274.186 1.906.28 8.985 3.077 18.83 5.733 29.532 7.94C173.36 273.35 209.74 321.22 212.69 368c-33.514 23.096-59.47 62.844-59.47 62.844l26.28 38.686L138.28 493h81.97c-40.425-40.435-11.76-85.906 36.125-85.906 48.54 0 73.945 48.112 36.156 85.906h81.126l-40.375-23.47 26.283-38.686s-26.376-40.4-60.282-63.406c3.204-46.602 39.5-94.167 89.595-113.844 10.706-2.207 20.546-4.86 29.53-7.938.633-.095 1.273-.195 1.908-.28h-1.125c134.927-46.82 77.163-186.094-73.157-226.69-40.722 39.37 6.54 101.683 43.626 56.877 36.9 69.08 8.603 127.587-72.28 83.406-11.88 24.492-34.213 41.374-60.688 41.374-26.703 0-49.168-17.167-60.97-42-81.774 45.38-110.512-13.372-73.437-82.78 37.09 44.805 84.35-17.508 43.626-56.876zm90.79 35.92c-27.388 0-51.33 27.556-51.33 63.61 0 36.056 23.942 62.995 51.33 62.995 27.387 0 51.327-26.94 51.327-62.994 0-36.058-23.94-63.61-51.328-63.61z",
       "st-sapped": "M93.46 20.72c1.63 23.26 3.31 46.51 4.95 69.77-23.11 2.13-46.17 4.3-69.28 6.43 29.35 18.68 58.74 37.28 88.07 55.88 9.3-3.6 18.5-7.2 27.7-10.9 26.7 22.8 53.5 45.6 80.2 68.3 7.5-1.6 15.2-3.3 22.7-4.9-30.5-25.7-61-51.5-91.5-77.2 2.3-9.9 4.6-19.8 6.9-29.69C140 72.53 116.7 46.6 93.46 20.72zM245.9 220.1c-1.5 7-3 13.9-4.5 20.8 11.4 11.7 22.8 23.4 34.1 35.1.4.2.7.4 1 .5 1.4-7.4 2.7-14.8 4-22.2-11.5-11.4-23.1-22.8-34.6-34.2zM217.7 231c-5.8 1.2-11.6 2.3-17.4 3.5 5 4.9 9.9 9.9 14.9 14.8 1.9-3.4 5-15.9 2.5-18.3zm89 5.5c-1.1 6.9-2.3 13.8-3.4 20.7 1.8 2.2 3.6 4.3 5.4 6.5l.5.5c5.4-3.2 10.9-6.3 16.3-9.4v-.5c-6.3-6-12.5-11.9-18.8-17.8zm10.9 36.1c-5.4 2.4-10.9 4.9-16.3 7.4v.5c37.2 46.2 74.5 92.4 111.8 138.5-12.7 1.7-25.4 3.4-38.1 5-.1.5-.3 1-.5 1.5 36.1 21.9 72.2 43.9 108.4 65.8-13.9-40.3-27.7-80.5-41.6-120.8l-12.9 37.2H427c-36.5-45.1-72.9-90.1-109.4-135.1z",
       "st-exposed": "M107.563 21.406c122.47 187.613 107.72 216.17-74.97 55.813 83.344 103.73 183.05 185.66 287.876 260.75-47.685 54.762-65.51 116.2-39.283 141.374 27.95 26.827 95.317 2.292 150.25-54.938 54.934-57.23 76.668-125.547 48.72-152.375-26.4-25.338-87.652-4.57-140.657 46.033C267.523 213.846 194.602 110.56 107.562 21.406zm324.906 266.781c9.865-.14 18.234 2.508 24.25 8.282 21.386 20.528 4.908 72.768-37.126 116.56-42.035 43.794-93.957 62.81-115.344 42.283-19.952-19.15-6.325-65.992 29.72-107.75 3.706 2.625 7.405 5.264 11.124 7.875-26.5 31.075-36.24 65.542-21.406 79.78 16.03 15.39 54.65 1.294 86.156-31.53 31.507-32.825 44-71.99 27.97-87.375-15.205-14.592-50.578-2.533-81.064 26.75-2.594-3.763-5.187-7.52-7.78-11.282 28.526-27.297 60.18-43.263 83.5-43.592zm-22.033 37.375c5.66-.08 10.457 1.44 13.907 4.75 12.267 11.774 2.827 41.758-21.28 66.875-24.11 25.118-53.89 36.024-66.158 24.25-11.245-10.793-3.876-36.93 16-60.562 5.976 4.173 11.97 8.327 17.97 12.47-9.746 11-14.027 22.66-9.563 27.124 4.904 4.903 18.483-.735 30.343-12.595 11.86-11.86 17.498-25.47 12.594-30.375-4.778-4.778-17.8.476-29.438 11.72-4.21-6.092-8.42-12.186-12.625-18.283 16.46-15.875 34.774-25.184 48.25-25.375z",
       "st-mending": "M250.9 18.9c-23.9 2.99-45.3 30.65-45.3 66.99 0 19.91 6.8 37.41 16.8 49.61l12.2 14.5-18.7 3.5c-13 2.5-22.6 9.5-30.7 20.8-8.5 11.5-14.8 26.9-19.1 45.2-8 32.7-9.9 72.7-9.9 108.2h43.6l11.7 160.5c30.4 7 63.1 6.5 92.3 0l10.7-160.5H356c0-35.7-.5-76.4-7.8-109.7-3.9-17.9-10-33.7-18.2-45.1-8.2-11.1-18.5-17.8-33.3-20.1l-18.9-3 11.9-14.9c9.9-12.1 16.4-29.6 16.4-49.01 0-38.54-24-66.99-50.3-66.99h-4.9zm145 3.59v41.85h-41.8v50.16h41.8v41.6h49.9v-41.6h41.9V64.34h-41.9V22.49h-49.9zM52.92 62.89v30.58H22.39v36.63h30.53v30.4h36.4v-30.4h30.58V93.47H89.32V62.89h-36.4zM92.63 199.7v21.8H70.75v26.3h21.88v21.9h26.27v-21.9h21.8v-26.3h-21.8v-21.8H92.63zm355.07 62.4v21.8h-21.9v26.3h21.9v21.9H474v-21.9h21.8v-26.3H474v-21.8h-26.3zm-307.5 99.4v15h-15v18h15v15h18.1v-15h15v-18h-15v-15h-18.1zm230 45.8v15h-15v18h15v15h18v-15h15v-18h-15v-15h-18zM49.32 431.8v15h-15v18h15v15h18.01v-15h15v-18h-15v-15H49.32z",
       "st-blight": "M181 181c15 0 60-60 30-105 15-15 15-30 45-30s60 45 60 75-30 60-75 90-120 90-120 165c0 60 45 120 120 120s150-30 150-120c0-60-60-90-90-90-45 0-75 30-90 75 45-60 135-60 135 15 0 45-45 75-105 75-30 0-60-30-60-75s45-90 90-120 90-75 90-120c0-60-45-120-105-120-30 0-60 30-75 45s-45 15-45 60c0 15 30 60 45 60z",
       "st-warded": "m19.36 19.457-.38 27.84 267.127 154.75-58.703 19.916 57.602 19.36L142.12 383.546l-19.214-19.213-51.47 114.324 123.125-43.482-17.492-18.95 151.868-151.87 12.433 43.078 22.976-68.5 56.675-16.565-57.475-15.492-22.934-79.828-14.145 48.266-268.65-155.41-38.454-.446zM370.614 81.94c-4.53.02-9.035.12-13.51.302-3.275.134-6.528.32-9.76.547l31.25 108.786 104.05 28.045c6.204-39.085 8.902-80.275 9.18-120.075C456.37 88.82 415.098 82.257 375.15 81.95a403.83 403.83 0 0 0-4.537-.01zm-36.87 2.1c-31.99 3.653-61.013 12.153-83.014 25.87l64.493 37.31 18.52-63.18zm148.18 139.997L378.958 254.13l-38.93 116.054-20.268-70.225-39.07 39.067c18.814 35.364 46.1 62.287 86.175 77.604 47.473-17.834 78.566-62.795 98.014-121.6 7.323-22.14 12.905-46.11 17.042-70.993z",
+      "st-grace": "M129.656 21.188 37.936 79.78c3.54 26.805 8.915 53.547 16.127 80.126L240.72 39.594l-19.282-12.5c-31.28-.885-62.204-2.842-91.782-5.907zm253.47.625c-40.51 3.975-83.496 5.938-126.47 5.843l204.625 132.72c7.108-25.89 12.487-51.92 16.095-78.032l-94.25-60.53zM257.937 50.75 59.468 178.656c8.025 26.32 17.865 52.456 29.532 78.313l243.25-158-74.313-48.22zm91.468 59.344-74.562 48.437 151.28 98.782c11.714-25.803 21.592-51.91 29.688-78.187l-106.406-69.03zm-91.687 59.562L97 274.062c12.202 25.17 26.14 50.064 41.844 74.563l196.094-128.53-77.22-50.44zM352 231.22l-77.53 50.843 101.405 67.187c15.822-24.6 29.895-49.584 42.22-74.875L352 231.22zm-94.53 61.968-108.345 71.03c13.564 20.062 28.326 39.847 44.28 59.313l132.032-85.28-67.968-45.063zm84.967 56.312L274.5 393.406l47.03 30.375c15.845-19.342 30.513-38.993 44.033-58.936L342.438 349.5zm-84.968 54.875L205.5 437.97c16.233 18.933 33.614 37.54 52.156 55.78 18.385-18.152 35.637-36.678 51.78-55.53l-52.092-33.626.125-.22z",
+      "st-brittle": "M53.156 25.78c30.55 26.034 52.813 95.137 52.813 176.47 0 44.36-6.922 84.657-17.814 116.688 31.134 71.43 85.946 122.39 179.906 175.28 91.558-48.747 144.024-96.565 173.75-167.593-12.5-33.06-20.28-76.47-20.28-124.375 0-81.333 22.262-150.436 52.812-176.47-41.924 9.324-83.858 16.318-125.78 20.595L277.904 181.72l46.47 20.655L209.312 391.72l41.468-169.595-22.53-10.25-71.375 19.938 59.406-50.22L259.938 51.22c-68.92.347-137.86-7.508-206.78-25.44z",
+      "st-aegis": "M57.78 23.135c-1.517 29.085-2.193 55.608-2.266 80.316 6.56-2.716 13.703-4.333 21.228-4.333 31.245 0 56.883 25.64 56.883 56.887 0 31.246-25.777 56.3-56.883 56.3-6.068 0-11.95-1.003-17.488-2.77C71.906 332.82 108.064 376.35 147.668 401.9c20.677 13.34 42.986 21.7 64.268 33.245 17.444 9.463 34.177 21.525 47.42 40.127 13.23-18.597 29.925-30.658 47.324-40.122 21.226-11.545 43.46-19.904 64.064-33.242 39.46-25.543 75.488-69.07 88.135-192.324-5.32 1.708-10.974 2.723-16.907 2.723-31.107 0-56.88-25.058-56.88-56.3 0-31.244 25.634-56.888 56.88-56.888 7.63 0 14.745 1.697 21.23 4.508-.07-24.757-.745-51.334-2.265-80.49-59.488 13-130.78 19.266-201.5 19.888h-.163c-70.718-.62-142.008-6.888-201.496-19.888zm304.124 39.32-27.117 93.18-17.945-5.22 11.504-39.532-85.116 63.646-11.19-14.97 129.864-97.105zm-205.394 1.01 81.732 59.512-11 15.107-34.338-25.004 34.79 103.514-17.714 5.955-53.47-159.085zm140.486 99.652 129.383 97.95-98.25-.48.09-18.69 42.15.208-84.653-64.087 11.28-14.9zm-122.357 37.71 10.83 15.228-36.206 25.754 104.898-.17.03 18.69-163.577.262 84.024-59.766zm117.79 21 17.806 5.675-49.39 155.008-31.248-96.46 17.777-5.76 13.324 41.124 31.73-99.586z",
       "hp": "M480.25 156.355c0 161.24-224.25 324.43-224.25 324.43S31.75 317.595 31.75 156.355c0-91.41 70.63-125.13 107.77-125.13 77.65 0 116.48 65.72 116.48 65.72s38.83-65.73 116.48-65.73c37.14.01 107.77 33.72 107.77 125.14z",
       "gold": "M264.4 95.01c-35.6-.06-80.2 11.19-124.2 34.09C96.27 152 61.45 182 41.01 211.3c-20.45 29.2-25.98 56.4-15.92 75.8 10.07 19.3 35.53 30.4 71.22 30.4 35.69.1 80.29-11.2 124.19-34 44-22.9 78.8-53 99.2-82.2 20.5-29.2 25.9-56.4 15.9-75.8-10.1-19.3-35.5-30.49-71.2-30.49zm91.9 70.29c-3.5 15.3-11.1 31-21.8 46.3-22.6 32.3-59.5 63.8-105.7 87.8-46.2 24.1-93.1 36.2-132.5 36.2-18.6 0-35.84-2.8-50.37-8.7l10.59 20.4c10.08 19.4 35.47 30.5 71.18 30.5 35.7 0 80.3-11.2 124.2-34.1 44-22.8 78.8-52.9 99.2-82.2 20.4-29.2 26-56.4 15.9-75.7zm28.8 16.8c11.2 26.7 2.2 59.2-19.2 89.7-18.9 27.1-47.8 53.4-83.6 75.4 11.1 1.2 22.7 1.8 34.5 1.8 49.5 0 94.3-10.6 125.9-27.1 31.7-16.5 49.1-38.1 49.1-59.9 0-21.8-17.4-43.4-49.1-59.9-16.1-8.4-35.7-15.3-57.6-20zm106.7 124.8c-10.2 11.9-24.2 22.4-40.7 31-35 18.2-82.2 29.1-134.3 29.1-21.2 0-41.6-1.8-60.7-5.2-23.2 11.7-46.5 20.4-68.9 26.1 1.2.7 2.4 1.3 3.7 2 31.6 16.5 76.4 27.1 125.9 27.1s94.3-10.6 125.9-27.1c31.7-16.5 49.1-38.1 49.1-59.9z",
       "floor": "M64 448v-64h64v-64h64v-64h64v-64h64v-64h64V64h64v384z",
@@ -1139,8 +1146,8 @@
     }
     // Content -> icon key lookups.
     const NODE_ICONS = { COMBAT: 'combat', ELITE: 'elite', REST: 'rest', SHOP: 'shop', EVENT: 'event', TREASURE: 'treasure', BOSS: 'boss' };
-    const INTENT_ICONS = { ATTACK: 'int-attack', ATTACK_ALL: 'int-attack-all', BUFF_MIGHT: 'int-buff', BLOCK_INTENT: 'int-block', SAPPED: 'int-sapped', EXPOSED: 'int-exposed', BLIGHT: 'int-blight', HEAL: 'int-heal', ADD_CURSE: 'int-curse', SUMMON: 'int-summon', UNKNOWN: 'int-unknown' };
-    const STATUS_ICONS = { might: 'st-might', sapped: 'st-sapped', exposed: 'st-exposed', mending: 'st-mending', blight: 'st-blight', warded: 'st-warded' };
+    const INTENT_ICONS = { ATTACK: 'int-attack', ATTACK_ALL: 'int-attack-all', BUFF_MIGHT: 'int-buff', BLOCK_INTENT: 'int-block', SAPPED: 'int-sapped', EXPOSED: 'int-exposed', BLIGHT: 'int-blight', BRITTLE: 'int-brittle', HEAL: 'int-heal', ADD_CURSE: 'int-curse', SUMMON: 'int-summon', UNKNOWN: 'int-unknown' };
+    const STATUS_ICONS = { might: 'st-might', sapped: 'st-sapped', exposed: 'st-exposed', mending: 'st-mending', blight: 'st-blight', warded: 'st-warded', grace: 'st-grace', brittle: 'st-brittle', aegis: 'st-aegis' };
     const CARD_TYPE_ICONS = { ATTACK: 'type-attack', SKILL: 'type-skill', POWER: 'type-power', CURSE: 'type-curse' };
     const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor' };
     const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial' };
@@ -1148,12 +1155,26 @@
     // Ids (relics + potions) that have a curated colored pixel-art raster in assets/art/icons/.
     // Any id NOT listed here falls through to the monochrome game-icons.net SVG below.
     const RASTER_ICONS = new Set([
-      // potions
-      'focus-tonic', 'blazing-draught', 'second-breath', 'overcharge', 'vigor',
-      // relics
-      'old-locket', 'ember-charm', 'vital-ember', 'prayer-beads', 'vulture-feather',
-      'pen-nib', 'bloodstained-idol', 'ancient-shield', 'iron-tortoise', 'thornmail',
-      'cracked-whetstone', 'hand-of-greed', 'molten-heart', 'ember-lens', 'mirror-shard',
+      "focus-tonic",
+      "blazing-draught",
+      "second-breath",
+      "overcharge",
+      "vigor",
+      "old-locket",
+      "ember-charm",
+      "vital-ember",
+      "prayer-beads",
+      "vulture-feather",
+      "pen-nib",
+      "bloodstained-idol",
+      "ancient-shield",
+      "iron-tortoise",
+      "thornmail",
+      "cracked-whetstone",
+      "hand-of-greed",
+      "molten-heart",
+      "ember-lens",
+      "mirror-shard",
     ]);
     function rasterIcon(id) { return '<img class="icon icon-img" src="assets/art/icons/' + id + '.png" alt="">'; }
     // Helper accessors. Each returns final HTML (raster img, icon svg, or a text fallback), never throws.
@@ -2368,12 +2389,21 @@
         };
       });
 
+      // Innate cards surface (stably) to the top of the shuffled draw pile so
+      // they land in the opening hand.
+      const drawPile = shuffle(game.run.deck.map(c => ({ ...c })));
+      drawPile.sort((a, b) => {
+        const ai = CARDS_DB[a.defId] && CARDS_DB[a.defId].innate ? 1 : 0;
+        const bi = CARDS_DB[b.defId] && CARDS_DB[b.defId].innate ? 1 : 0;
+        return bi - ai;
+      });
+
       game.combat = {
         enemies,
         player: { block: 0, statuses: {} },
         energy: LAYOUT.ENERGY_MAX,
         energyMax: LAYOUT.ENERGY_MAX,
-        drawPile: shuffle(game.run.deck.map(c => ({ ...c }))),
+        drawPile,
         hand: [],
         discardPile: [],
         exhaustPile: [],
@@ -2451,8 +2481,9 @@
       // Unplayable cards (curses) can't be played.
       if (cardDef.unplayable) return;
 
-      // Validate energy
-      if (game.combat.energy < cardDef.cost) return;
+      // Validate energy. X-cost cards spend all remaining energy (0 is legal).
+      const isXCost = cardDef.cost === 'X';
+      if (!isXCost && game.combat.energy < cardDef.cost) return;
 
       // Handle targeting
       if (cardDef.target === 'ENEMY_SINGLE' && !targetUid) {
@@ -2472,6 +2503,9 @@
         target = game.combat.enemies.find(e => e.uid === targetUid && e.alive);
         if (!target) return;
       }
+
+      // X-cost cards snapshot the energy they consume; effects read card._x.
+      if (isXCost) card._x = game.combat.energy;
 
       // Relic: Pen Nib primes an upgraded card. Temporarily treat this play as upgraded.
       const originallyUpgraded = card.upgraded;
@@ -2502,7 +2536,8 @@
         game.combat.discardPile.push(card);
       }
 
-      game.combat.energy -= cardDef.cost;
+      game.combat.energy -= isXCost ? card._x : cardDef.cost;
+      if (isXCost) delete card._x;
       game.combat.pendingCardUid = null;
 
       // SFX cue by card type (block/hit cues come from the damage/block floats)
@@ -2545,14 +2580,22 @@
     }
 
     function endPlayerTurn(game) {
-      // In-hand end-of-turn card effects (e.g. Decay curse).
+      // In-hand end-of-turn card effects (e.g. Decay curse) run before the hand
+      // resolves, so retained cards still pay their in-hand price.
       for (const card of game.combat.hand) {
         const def = CARDS_DB[card.defId];
         if (def && typeof def.onEndTurnInHand === 'function') def.onEndTurnInHand(game, card);
       }
 
-      game.combat.discardPile.push(...game.combat.hand);
-      game.combat.hand = [];
+      // Resolve the hand: Retain keeps a card, Ethereal exhausts it, the rest discard.
+      const kept = [];
+      for (const card of game.combat.hand) {
+        const def = CARDS_DB[card.defId] || {};
+        if (def.retain) kept.push(card);
+        else if (def.ethereal) game.combat.exhaustPile.push(card);
+        else game.combat.discardPile.push(card);
+      }
+      game.combat.hand = kept;
 
       tickStatusesEndOfTurn(game.combat.player);
 
@@ -2609,6 +2652,9 @@
         case 'BLIGHT':
           applyStatus(game.combat.player, 'blight', intent.value);
           break;
+        case 'BRITTLE':
+          applyStatus(game.combat.player, 'brittle', intent.value);
+          break;
         case 'HEAL': {
           const wounded = game.combat.enemies.filter(e => e.alive && e.hp < e.maxHp);
           const target = wounded.sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0] || enemy;
@@ -2641,6 +2687,7 @@
         || numeric(/^SAPPED(\d+)$/, 'SAPPED')
         || numeric(/^EXPOSED(\d+)$/, 'EXPOSED')
         || numeric(/^BLIGHT(\d+)$/, 'BLIGHT')
+        || numeric(/^BRITTLE(\d+)$/, 'BRITTLE')
         || numeric(/^BUFF_MIGHT(\d+)$/, 'BUFF_MIGHT')
         || numeric(/^BLOCK(\d+)$/, 'BLOCK_INTENT')
         || numeric(/^HEAL(\d+)$/, 'HEAL')
@@ -2847,13 +2894,25 @@
     }
 
     function gainBlock(entity, amount) {
-      entity.block += amount + (entity.statuses && entity.statuses.warded ? entity.statuses.warded : 0);
+      const statuses = entity.statuses || {};
+      let total = amount + (statuses.warded || 0);
+      // Brittle cuts the whole gain (after Warded) by 25%.
+      if (statuses.brittle) total = Math.floor(total * 0.75);
+      entity.block += total;
       // Shield-orb feedback only when the player gains block (not enemies, not combat-start relics before render).
       if (STATE && STATE.combat && entity === STATE.combat.player) playEffect('player', 'block');
     }
 
+    const DEBUFF_STATUSES = ['sapped', 'exposed', 'blight', 'brittle'];
+
     function applyStatus(entity, statusName, stacks) {
       if (!entity || !entity.statuses || !statusName || !stacks) return;
+      // Aegis eats the next incoming debuff, one stack per debuff.
+      if (stacks > 0 && DEBUFF_STATUSES.includes(statusName) && entity.statuses.aegis) {
+        entity.statuses.aegis--;
+        if (entity.statuses.aegis <= 0) delete entity.statuses.aegis;
+        return;
+      }
       if (!entity.statuses[statusName]) entity.statuses[statusName] = 0;
       entity.statuses[statusName] += stacks;
     }
@@ -2865,6 +2924,9 @@
 
     function tickStatusesStartOfTurn(game, entity) {
       const isPlayer = entity === game.combat.player;
+
+      // Grace grants its stacks as Block at the start of each turn (does not decay).
+      if (entity.statuses.grace) gainBlock(entity, entity.statuses.grace);
 
       if (entity.statuses.mending) {
         const heal = entity.statuses.mending;
@@ -2892,6 +2954,11 @@
       if (entity.statuses.exposed) {
         entity.statuses.exposed--;
         if (entity.statuses.exposed <= 0) delete entity.statuses.exposed;
+      }
+
+      if (entity.statuses.brittle) {
+        entity.statuses.brittle--;
+        if (entity.statuses.brittle <= 0) delete entity.statuses.brittle;
       }
     }
 
@@ -3355,9 +3422,14 @@
     function describeCard(cardOrDef, forceUpgraded) {
       const def = cardOrDef.defId ? CARDS_DB[cardOrDef.defId] : cardOrDef;
       const upgraded = forceUpgraded != null ? forceUpgraded : !!cardOrDef.upgraded;
-      if (def.desc) return typeof def.desc === 'function' ? def.desc(upgraded) : def.desc;
+      const keywords = [];
+      if (def.innate) keywords.push('Innate.');
+      if (def.retain) keywords.push('Retain.');
+      if (def.ethereal) keywords.push('Ethereal.');
+      const keywordText = keywords.length ? ' ' + keywords.join(' ') : '';
+      if (def.desc) return (typeof def.desc === 'function' ? def.desc(upgraded) : def.desc) + keywordText;
       const v = (upgraded && def.upgradedValues) ? def.upgradedValues : (def.values || {});
-      const statusNames = { might: 'Might', sapped: 'Sapped', exposed: 'Exposed', blight: 'Blight', mending: 'Mending', warded: 'Warded' };
+      const statusNames = { might: 'Might', sapped: 'Sapped', exposed: 'Exposed', blight: 'Blight', mending: 'Mending', warded: 'Warded', grace: 'Grace', brittle: 'Brittle', aegis: 'Aegis' };
       const parts = [];
       for (const eff of (def.effects || [])) {
         const amt = eff.key != null ? v[eff.key] : eff.value;
@@ -3370,7 +3442,7 @@
         else if (eff.type === 'APPLY_SELF_STATUS') parts.push(`Gain ${amt} ${statusNames[eff.status] || eff.status}.`);
       }
       if (def.exhaust) parts.push('Exhaust.');
-      return parts.join(' ');
+      return parts.join(' ') + keywordText;
     }
 
     function previewEnemyAttack(enemy, player) {
@@ -3388,8 +3460,8 @@
       const intentDesc = {
         ATTACK: 'Attacks', ATTACK_ALL: 'Attacks', BUFF_MIGHT: 'Buffing Might',
         BLOCK_INTENT: 'Defending', SAPPED: 'Weakening you', EXPOSED: 'Exposing you',
-        BLIGHT: 'Poisoning you', HEAL: 'Healing', ADD_CURSE: 'Cursing your deck',
-        SUMMON: 'Summoning help', UNKNOWN: 'Unknown'
+        BLIGHT: 'Poisoning you', BRITTLE: 'Making you Brittle', HEAL: 'Healing',
+        ADD_CURSE: 'Cursing your deck', SUMMON: 'Summoning help', UNKNOWN: 'Unknown'
       };
       const enemyHTML = enemies.filter(e => e.alive).map(enemy => {
         const hpPercent = Math.max(0, Math.min(100, (enemy.hp / enemy.maxHp) * 100));
@@ -3399,7 +3471,7 @@
 
         const it = enemy.intent ? enemy.intent.type : 'UNKNOWN';
         const intentIcon = intentIconFor(it);
-        const showValue = ['ATTACK','ATTACK_ALL','BUFF_MIGHT','BLOCK_INTENT','SAPPED','EXPOSED','BLIGHT','HEAL','ADD_CURSE'].includes(it);
+        const showValue = ['ATTACK','ATTACK_ALL','BUFF_MIGHT','BLOCK_INTENT','SAPPED','EXPOSED','BLIGHT','BRITTLE','HEAL','ADD_CURSE'].includes(it);
         const intentValue = showValue ? (it === 'ATTACK' || it === 'ATTACK_ALL' ? previewEnemyAttack(enemy, STATE.combat.player) : (enemy.intent.value || 1)) : '';
 
         return `
@@ -3434,7 +3506,7 @@
       const handHTML = hand.map(card => {
         const cardDef = CARDS_DB[card.defId];
         const typeClass = cardDef.type.toLowerCase();
-        const affordable = cardDef.cost <= energy;
+        const affordable = cardDef.cost === 'X' || cardDef.cost <= energy;
         return `
           <div class="card ${typeClass} ${affordable ? '' : 'unaffordable'}" data-action="selectCard" data-carduid="${card.uid}" title="${cardDef.name}">
             <div class="card-cost">${cardDef.cost}</div>
@@ -3742,12 +3814,13 @@
         const def = CARDS_DB[card.defId];
         if (!def) continue;
         counts[def.type] = (counts[def.type] || 0) + 1;
-        if (def.type !== CARD_TYPES.CURSE) { totalCost += def.cost; countedCost++; }
-        const key = def.cost >= 3 ? '3+' : String(def.cost);
+        const numericCost = typeof def.cost === 'number' ? def.cost : null;
+        if (def.type !== CARD_TYPES.CURSE && numericCost != null) { totalCost += numericCost; countedCost++; }
+        const key = numericCost == null ? 'X' : (numericCost >= 3 ? '3+' : String(numericCost));
         costs[key] = (costs[key] || 0) + 1;
       }
       const avg = countedCost ? (totalCost / countedCost).toFixed(2) : '0.00';
-      const curve = ['0','1','2','3+'].map(k => `${k}: ${costs[k] || 0}`).join(' · ');
+      const curve = ['0','1','2','3+'].concat(costs['X'] ? ['X'] : []).map(k => `${k}: ${costs[k] || 0}`).join(' · ');
       return `<div class="deck-stats">Types: Attack ${counts.ATTACK || 0} · Skill ${counts.SKILL || 0} · Power ${counts.POWER || 0} · Curse ${counts.CURSE || 0}<br>Average non-curse cost: ${avg}<br>Cost curve: ${curve}</div>`;
     }
 
@@ -4131,10 +4204,13 @@
     function validateContent() {
       const warnings = [];
       const knownTargets = ['SELF', 'ENEMY_SINGLE', 'ENEMY_ALL'];
+      const knownCardFields = ['id', 'name', 'cost', 'type', 'rarity', 'target', 'values', 'upgradedValues', 'effects', 'custom', 'desc', 'exhaust', 'unplayable', 'ethereal', 'retain', 'innate', 'onEndTurnInHand', 'character'];
       for (const [id, card] of Object.entries(CARDS_DB)) {
         if (id !== card.id) warnings.push(`Card key/id mismatch: ${id}`);
         if (!card.name || card.cost == null || !card.type || !card.rarity) warnings.push(`Card missing fields: ${id}`);
+        if (card.cost !== 'X' && typeof card.cost !== 'number') warnings.push(`Card cost must be a number or 'X': ${id}`);
         if (card.target && !knownTargets.includes(card.target)) warnings.push(`Unknown card target on ${id}: ${card.target}`);
+        for (const key of Object.keys(card)) if (!knownCardFields.includes(key)) warnings.push(`Unknown card field '${key}' on ${id} (typo in a keyword flag?)`);
         for (const eff of (card.effects || [])) {
           if (!['DAMAGE','BLOCK','DRAW','ENERGY','HEAL','APPLY_STATUS','APPLY_SELF_STATUS'].includes(eff.type)) warnings.push(`Unsupported effect ${eff.type} on ${id}`);
           if ((eff.type === 'APPLY_STATUS' || eff.type === 'APPLY_SELF_STATUS') && !STATUS_INFO[eff.status]) warnings.push(`Unknown status ${eff.status} on ${id}`);
@@ -4207,7 +4283,7 @@
           while (STATE.screen === SCREENS.COMBAT && turns < 60 && actions++ < 800) {
             const playable = STATE.combat.hand.filter(c => {
               const def = CARDS_DB[c.defId];
-              return def && !def.unplayable && def.cost <= STATE.combat.energy;
+              return def && !def.unplayable && (def.cost === 'X' || def.cost <= STATE.combat.energy);
             });
             if (!playable.length) { turns++; endPlayerTurn(STATE); continue; }
             const attacks = playable.filter(c => CARDS_DB[c.defId].type === CARD_TYPES.ATTACK);
