@@ -12,9 +12,32 @@
     }
 
     :root {
-      /* Type anchor. Phase 2 replaces this with a viewport clamp; every font size
-         in the file is relative to it. */
-      font-size: 16px;
+      /* Fluid type anchor: 16px at the 1000px minimum window, 19px at >=1900px.
+         Under the old scaled stage the design implicitly assumed a multiplier
+         (a 1440x900 window ran at scale 1.4), so raising this restores the
+         intended physical size rather than enlarging anything. */
+      font-size: clamp(16px, 0.35vw + 12.5px, 19px);
+
+      /* === Type scale — non-compounding by construction (rem, not em). ===
+         RULE: font sizes come from --fs-* only. Never set a fractional `em`
+         font-size on an element whose ancestor already set one — that is how
+         .card-desc became 0.7em of 0.75em = 8.4px. 12px is the floor. */
+      --fs-xs:   0.75rem;    /* 12.0-14.3px — chip counts, card type, hints */
+      --fs-sm:   0.8125rem;  /* 13.0-15.4px — card rules text, log, descriptions */
+      --fs-md:   0.875rem;   /* 14.0-16.6px — status bar, stat readouts */
+      --fs-base: 1rem;       /* 16.0-19.0px — body copy, buttons */
+      --fs-lg:   1.125rem;   /* 18.0-21.4px — card/enemy names, panel labels */
+      --fs-xl:   1.375rem;   /* 22.0-26.1px — panel titles, floating numbers */
+      --fs-2xl:  2rem;       /* 32.0-38.0px — VICTORY / DEFEAT */
+      --fs-3xl:  2.75rem;    /* 44.0-52.3px — menu title */
+
+      /* Block-level artwork. Not `em`: these size against a BOX (a map node, a
+         card), so coupling them to label text would be wrong. */
+      --icon-art:       2rem;    /* card art, shop item art (was 30px) */
+      --icon-node:      2.25rem; /* map node (was 34px) */
+      --icon-node-boss: 2.75rem; /* boss node (was 44px) */
+      --icon-title:     1.5rem;  /* icons flanking panel titles (was 24px) */
+      --icon-portrait:  4rem;    /* enemy portrait (was 44px) — desktop has room */
 
       /* === Solarized Light (Ethan Schoonover) === */
       --bg-dark: #fdf6e3;        /* base3  — main background */
@@ -96,7 +119,7 @@
       color: var(--text-primary);
       border-radius: 4px;
       font-family: inherit;
-      font-size: 1.125rem;
+      font-size: var(--fs-lg);
       line-height: 1;
       cursor: pointer;
       opacity: 0.85;
@@ -140,7 +163,7 @@
     }
 
     .menu-title {
-      font-size: 2.5em;
+      font-size: var(--fs-3xl);
       margin-bottom: 20px;
       color: var(--color-danger);
       text-shadow: 0 0 10px rgba(220, 50, 47, 0.25);
@@ -154,14 +177,14 @@
     .menu-button {
       display: block;
       width: 100%;
-      padding: 15px;
+      padding: 0.75rem 1rem;
       margin: 10px 0;
       background: var(--bg-dark);
       border: 2px solid var(--border-color);
       color: var(--text-primary);
       cursor: pointer;
       font-family: inherit;
-      font-size: 1.1em;
+      font-size: var(--fs-lg);
       transition: all 0.2s;
     }
 
@@ -178,7 +201,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.9em;
+      font-size: var(--fs-md);
     }
 
     .status-left, .status-right {
@@ -195,8 +218,8 @@
 
     .hp-bar {
       display: inline-block;
-      width: 80px;
-      height: 8px;
+      width: 5rem;
+      height: 0.625rem;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
       position: relative;
@@ -209,18 +232,24 @@
       transition: width 0.2s;
     }
 
+    /* Flex-centred rather than line-height-centred: the icon runs at 1.35em with a
+       negative vertical-align, which used to push its descender ~2px past a
+       line-height box at every scale. */
     .relic-chip {
-      display: inline-block;
-      width: 24px;
-      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
       border: 1px solid var(--color-relic);
       background: rgba(108, 113, 196, 0.12);
-      text-align: center;
-      line-height: 24px;
-      font-size: 0.7em;
+      font-size: var(--fs-xs);
+      line-height: 1;
       cursor: help;
       border-radius: 2px;
     }
+    /* Inside a centred flex box the nudge is unnecessary and re-introduces overflow. */
+    .relic-chip .icon { vertical-align: 0; }
 
     /* === Map Screen === */
     .map-screen {
@@ -276,8 +305,11 @@
       position: absolute;
       transform: translate(-50%, -50%);
       cursor: default;
-      width: 74px;
-      height: 74px;
+      /* rem, not px: the node holds a --icon-node glyph plus a --fs-xs label, so a
+         fixed box overflowed once the type scale grew. Phase 6 owns the node's
+         POSITION; this is only its size. */
+      width: 4.75rem;
+      height: 4.75rem;
       border: 2px solid var(--border-color);
       background: var(--bg-panel);
       text-align: center;
@@ -315,16 +347,14 @@
     }
 
     .map-node.elite-node { border-color: var(--color-elite); }
-    .map-node.boss-node { border-color: var(--color-danger); width: 88px; height: 88px; }
-    .map-node.boss-node .map-node-icon { font-size: 2.2em; }
+    .map-node.boss-node { border-color: var(--color-danger); width: 5.75rem; height: 5.75rem; }
 
     .map-node-icon {
-      font-size: 1.7em;
       line-height: 1;
     }
 
     .map-node-type {
-      font-size: 0.6em;
+      font-size: var(--fs-xs);
       color: var(--text-muted);
       margin-top: 3px;
       letter-spacing: 0.04em;
@@ -334,7 +364,7 @@
       position: absolute;
       left: 6px;
       transform: translateY(-50%);
-      font-size: 0.7em;
+      font-size: var(--fs-xs);
       color: var(--text-muted);
       z-index: 1;
     }
@@ -406,13 +436,13 @@
     }
 
     .inspect-body {
-      font-size: 0.85em;
+      font-size: var(--fs-sm);
       color: var(--text-muted);
     }
 
     .inspect-hint {
       margin-top: 6px;
-      font-size: 0.7em;
+      font-size: var(--fs-xs);
       color: var(--text-muted);
       opacity: 0.7;
     }
@@ -421,7 +451,7 @@
     .dmg-preview {
       text-align: center;
       font-weight: bold;
-      font-size: 0.8em;
+      font-size: var(--fs-md);
       line-height: 1.2;
       color: var(--color-gold);
     }
@@ -438,7 +468,7 @@
 
     .energy-warning {
       align-self: center;
-      font-size: 0.8em;
+      font-size: var(--fs-md);
       color: var(--color-gold);
     }
 
@@ -489,9 +519,9 @@
 
     .enemy-intent {
       text-align: center;
-      font-size: 1.2em;
+      font-size: var(--fs-lg);
       color: var(--color-danger);
-      height: 25px;
+      min-height: 1.75rem;   /* was a hard 25px; now grows with the type scale */
       flex-shrink: 0;    /* otherwise it compresses and the icon overlaps the name */
       display: flex;
       align-items: center;
@@ -502,13 +532,13 @@
     .hp-display {
       display: flex;
       justify-content: space-between;
-      font-size: 0.8em;
+      font-size: var(--fs-md);
       margin-bottom: 5px;
     }
 
     .hp-bar-long {
       width: 100%;
-      height: 12px;
+      height: 0.875rem;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
       margin-bottom: 8px;
@@ -537,11 +567,11 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 1.75rem;
+      height: 1.75rem;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
-      font-size: 0.7em;
+      font-size: var(--fs-xs);
       text-align: center;
       cursor: help;
       border-radius: 2px;
@@ -571,14 +601,14 @@
     }
 
     .energy-orb {
-      width: 20px;
-      height: 20px;
+      width: 1.5rem;
+      height: 1.5rem;
       border: 1px solid var(--color-gold);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.6em;
+      font-size: var(--fs-xs);
     }
 
     .energy-orb.full {
@@ -608,11 +638,11 @@
       position: absolute;
       top: -5px;
       right: -5px;
-      width: 16px;
-      height: 16px;
+      width: 1.125rem;
+      height: 1.125rem;
       padding: 0;
       line-height: 1;
-      font-size: 11px;
+      font-size: var(--fs-xs);
       font-family: inherit;
       color: var(--color-danger);
       background: var(--bg-panel);
@@ -628,15 +658,15 @@
     }
 
     .potion-slot {
-      width: 44px;
-      height: 44px;
+      width: 2.25rem;
+      height: 2.25rem;
       border: 1px solid var(--color-relic);
       background: rgba(108, 113, 196, 0.15);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 0.9em;
+      font-size: var(--fs-md);
       border-radius: 3px;
       transition: all 0.2s;
     }
@@ -681,7 +711,6 @@
       display: flex;
       flex-direction: column;
       gap: 5px;
-      font-size: 0.75em;
     }
 
     .card:hover {
@@ -707,7 +736,7 @@
     .card-lethal-warning {
       margin-top: auto;
       text-align: center;
-      font-size: 0.82em;
+      font-size: var(--fs-xs);
       font-weight: bold;
       letter-spacing: 0.5px;
       color: var(--color-danger);
@@ -719,35 +748,39 @@
       position: absolute;
       top: 2px;
       left: 2px;
-      width: 22px;
-      height: 22px;
+      width: 1.5rem;
+      height: 1.5rem;
       background: var(--bg-panel);
       border: 1px solid var(--border-color);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
-      font-size: 0.85em;
+      font-size: var(--fs-sm);
     }
 
     .card-name {
+      font-size: var(--fs-md);   /* was inheriting .card's 0.75em, now deleted */
       font-weight: bold;
       text-align: center;
-      margin-top: 15px;
+      margin-top: 15px;    /* clears the absolutely-positioned .card-cost badge */
       word-break: break-word;
     }
 
     .card-type {
       text-align: center;
-      font-size: 0.7em;
+      font-size: var(--fs-xs);
       color: var(--text-muted);
     }
 
     .card-desc {
-      font-size: 0.7em;
+      font-size: var(--fs-sm);
       text-align: center;
       color: var(--text-muted);
       line-height: 1.2;
+      /* .card is still a fixed 92px until Phase 5 makes it elastic; without this a
+         long keyword ("Unplayable.") overruns it at the top of the type scale. */
+      word-break: break-word;
     }
 
     .card.attack {
@@ -768,7 +801,7 @@
       padding: 8px;
       height: 44px;
       overflow-y: auto;
-      font-size: 0.75em;
+      font-size: var(--fs-sm);
       color: var(--text-muted);
     }
 
@@ -793,7 +826,7 @@
       cursor: pointer;
       font-family: inherit;
       font-weight: bold;
-      font-size: 1em;
+      font-size: var(--fs-base);
       transition: all 0.2s;
     }
 
@@ -823,7 +856,7 @@
     }
 
     .panel-title {
-      font-size: 1.5em;
+      font-size: var(--fs-xl);
       margin-bottom: 20px;
       color: var(--text-primary);
       text-align: center;
@@ -842,14 +875,14 @@
     .choice-button {
       display: block;
       width: 100%;
-      padding: 15px;
+      padding: 0.75rem 1rem;
       margin: 10px 0;
       background: var(--bg-dark);
       border: 2px solid var(--border-color);
       color: var(--text-primary);
       cursor: pointer;
       font-family: inherit;
-      font-size: 0.95em;
+      font-size: var(--fs-base);
       text-align: left;
       transition: all 0.2s;
     }
@@ -867,7 +900,7 @@
 
     .choice-desc {
       display: block;
-      font-size: 0.85em;
+      font-size: var(--fs-sm);
       color: var(--text-muted);
     }
 
@@ -893,20 +926,20 @@
     .shop-item-price {
       color: var(--color-gold);
       font-weight: bold;
-      font-size: 0.9em;
+      font-size: var(--fs-md);
     }
 
     .leave-button, .skip-button, .new-run-button {
       display: block;
       width: 100%;
       margin-top: 20px;
-      padding: 12px;
+      padding: 0.625rem 1rem;
       background: var(--bg-dark);
       border: 2px solid var(--border-color);
       color: var(--text-primary);
       cursor: pointer;
       font-family: inherit;
-      font-size: 0.95em;
+      font-size: var(--fs-base);
       transition: all 0.2s;
     }
 
@@ -930,7 +963,7 @@
     }
 
     .victory-title {
-      font-size: 2em;
+      font-size: var(--fs-2xl);
       color: var(--color-heal);
       margin-bottom: 20px;
     }
@@ -944,7 +977,7 @@
     }
 
     .gameover-title {
-      font-size: 2em;
+      font-size: var(--fs-2xl);
       color: var(--color-danger);
       margin-bottom: 20px;
     }
@@ -961,7 +994,7 @@
       display: flex;
       justify-content: space-between;
       margin: 5px 0;
-      font-size: 0.95em;
+      font-size: var(--fs-md);
     }
 
     /* Floating combat numbers (fire-and-forget overlay) */
@@ -970,7 +1003,7 @@
       transform: translate(-50%, -50%);
       font-family: 'Courier New', monospace;
       font-weight: bold;
-      font-size: 1.4em;
+      font-size: var(--fs-xl);
       pointer-events: none;
       z-index: 1000;
       text-shadow: 0 0 4px rgba(0,0,0,0.8);
@@ -997,15 +1030,15 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 44px;
-      padding: 10px 12px;
+      min-height: 1.75rem;
+      padding: 0.25rem 0.5rem;
       margin: 2px;
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
       color: var(--text-primary);
       cursor: pointer;
       font-family: inherit;
-      font-size: 0.8em;
+      font-size: var(--fs-sm);
       border-radius: 3px;
     }
 
@@ -1019,7 +1052,7 @@
       padding-top: 12px;
       border-top: 1px solid var(--border-color);
       color: var(--text-muted);
-      font-size: 0.78em;
+      font-size: var(--fs-sm);
       text-align: left;
     }
 
@@ -1037,7 +1070,7 @@
       padding: 10px;
       margin-bottom: 12px;
       color: var(--text-muted);
-      font-size: 0.85em;
+      font-size: var(--fs-sm);
       line-height: 1.5;
     }
 
@@ -1047,7 +1080,7 @@
       color: var(--color-power);
       padding: 2px 5px;
       margin: 2px;
-      font-size: 0.75em;
+      font-size: var(--fs-xs);
       border-radius: 3px;
     }
 
@@ -1069,7 +1102,7 @@
         text-align: center;
         padding: 2.5rem;
         font-family: 'Courier New', monospace;
-        font-size: 1.125rem;
+        font-size: var(--fs-lg);
         color: var(--text-primary);
         background: var(--bg-dark);
       }
@@ -1097,6 +1130,18 @@
       background: var(--text-muted);
     }
 
+    /* Classes replacing inline font-size styles in the render templates, so every
+       size in the game comes from the --fs-* scale and the <12px audit in
+       tools/cdp-verify.mjs cannot be dodged by an inline style. */
+    .menu-blurb      { font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 6px; }
+    .asc-text        { font-size: var(--fs-sm); color: var(--text-muted); }
+    .menu-tagline    { font-size: var(--fs-sm); color: var(--text-muted); text-align: center; margin-top: 20px; }
+    .energy-label    { font-size: var(--fs-xs); color: var(--text-muted); text-align: center; }
+    .pile-row        { font-size: var(--fs-md); color: var(--text-muted); }
+    .active-powers   { font-size: var(--fs-sm); color: var(--text-muted); }
+    .targeting-hint  { font-size: var(--fs-sm); color: var(--color-gold); }
+    .shop-item-desc  { font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 6px; }
+
     /* ===== ICONS (game-icons.net) ===== */
     .icon {
       width: 1em; height: 1em;
@@ -1106,35 +1151,38 @@
       pointer-events: none;   /* clicks fall through to the data-action parent */
       flex-shrink: 0;
     }
-    .map-node-icon .icon { width: 34px; height: 34px; }
-    .map-node.boss-node .map-node-icon .icon { width: 44px; height: 44px; }
-    .enemy-intent .icon { width: 18px; height: 18px; }
+    /* Inline glyphs: the base rule above (1em) already tracks the type scale, so
+       most per-context px overrides were redundant and have been deleted. Only
+       these four need to run slightly larger than their label. */
+    .status-chip .icon { width: 1.15em; height: 1.15em; }
+    .relic-chip .icon { width: 1.35em; height: 1.35em; vertical-align: -0.2em; color: var(--color-relic); }
+    .potion-slot .icon { width: 1.35em; height: 1.35em; }
+    .card-type .icon { width: 1.1em; height: 1.1em; vertical-align: -0.1em; }
+
+    /* Block-level artwork: sized against a box, not a text run — hence tokens. */
+    .map-node-icon .icon { width: var(--icon-node); height: var(--icon-node); }
+    .map-node.boss-node .map-node-icon .icon { width: var(--icon-node-boss); height: var(--icon-node-boss); }
+    .card-art .icon { width: var(--icon-art); height: var(--icon-art); }
+    .shop-item-icon .icon { width: var(--icon-art); height: var(--icon-art); }
+    .icon-title { width: var(--icon-title); height: var(--icon-title); margin: 0 8px; vertical-align: -0.15em; }
+
     .status-chip { gap: 1px; }
-    .status-chip .icon { width: 15px; height: 15px; }
-    .status-chip .chip-count { font-size: 0.85em; font-weight: bold; }
-    .relic-chip .icon { width: 17px; height: 17px; vertical-align: -0.2em; color: var(--color-relic); }
-    .potion-slot .icon { width: 17px; height: 17px; }
-    .energy-orb .icon { width: 12px; height: 12px; }
-    .status-item .icon { width: 14px; height: 14px; margin-right: 3px; }
+    .status-chip .chip-count { font-size: var(--fs-xs); font-weight: bold; }
+    .status-item .icon { margin-right: 3px; }
     .status-item.stat-hp .icon { color: var(--color-heal); }
     .status-item.stat-gold .icon { color: var(--color-gold); }
     .status-item.stat-floor .icon { color: var(--text-muted); }
-    .card-type .icon { width: 13px; height: 13px; vertical-align: -0.1em; }
     .card-art { text-align: center; margin: 2px 0; color: var(--text-muted); }
-    .card-art .icon { width: 30px; height: 30px; }
     .card.attack .card-art .icon { color: var(--color-attack); }
     .card.skill .card-art .icon { color: var(--color-skill); }
     .card.power .card-art .icon { color: var(--color-power); }
     .card.curse .card-art .icon { color: var(--color-relic); }
-    .icon-title { width: 24px; height: 24px; margin: 0 8px; vertical-align: -0.15em; }
     .icon-block { color: var(--color-block); }
-    .block-display .icon { width: 15px; height: 15px; }
     .shop-item-icon { text-align: center; margin-bottom: 4px; color: var(--text-muted); }
-    .shop-item-icon .icon { width: 30px; height: 30px; }
-    .choice-label .icon { width: 16px; height: 16px; vertical-align: -0.2em; margin-right: 2px; }
-    .choice-desc .icon { width: 13px; height: 13px; vertical-align: -0.1em; }
-    .reward-summary .icon { width: 14px; height: 14px; vertical-align: -0.15em; }
-    .inline-chip-button .icon { width: 12px; height: 12px; vertical-align: -0.1em; }
+    .choice-label .icon { vertical-align: -0.2em; margin-right: 2px; }
+    .choice-desc .icon { vertical-align: -0.1em; }
+    .reward-summary .icon { vertical-align: -0.15em; }
+    .inline-chip-button .icon { vertical-align: -0.1em; }
     /* Curated colored pixel-art icons (relics/potions). Inherit per-context .icon sizing above;
        render crisply (no smoothing) and keep their own colors (no currentColor tint). */
     img.icon-img { image-rendering: pixelated; image-rendering: crisp-edges; object-fit: contain; fill: none; }
@@ -4264,7 +4312,7 @@
       const characterButtons = Object.values(CHARACTERS_DB).map(ch => `
         <div style="margin-bottom: 12px;">
           <div style="font-weight:bold; margin-bottom:4px;">${ch.name}</div>
-          <div style="color: var(--text-muted); font-size: 0.78em; margin-bottom: 6px;">${ch.blurb}</div>
+          <div class="menu-blurb">${ch.blurb}</div>
           ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" title="${describeAscension(a)}">Start A${a}</button>`).join('')}
         </div>
       `).join('');
@@ -4283,12 +4331,12 @@
               <div class="stat-line"><span>Best Gold:</span><span>${meta.bestGold || 0}</span></div>
               <div class="stat-line"><span>Ascension Unlocked:</span><span>${ascMax}</span></div>
             </div>
-            ${ascMax > 0 ? `<div class="stats-box"><div style="color: var(--text-muted); margin-bottom: 6px;">Ascension Modifiers</div><div style="font-size:0.78em; color:var(--text-muted);">${ascensionText}</div></div>` : ''}
+            ${ascMax > 0 ? `<div class="stats-box"><div style="color: var(--text-muted); margin-bottom: 6px;">Ascension Modifiers</div><div class="asc-text">${ascensionText}</div></div>` : ''}
             <div class="stats-box">
               <div style="color: var(--text-muted); margin-bottom: 6px;">Recent Runs</div>
               ${recent}
             </div>
-            <div style="color: var(--text-muted); font-size: 0.85em; text-align: center; margin-top: 20px;">
+            <div class="menu-tagline">
               Navigate a branching path. Build your deck. Defeat the vault boss.
             </div>
             ${DEV_TOOLS ? '<div class="debug-panel">Debug: open the console and use <code>CINDER_DEBUG</code> for validation, seed, and balance helpers.</div>' : ''}
@@ -4463,7 +4511,7 @@
         <div class="inspect-panel" data-action="closeInspect">
           <div class="inspect-title">${info.title}</div>
           <div class="inspect-body">${info.body}</div>
-          <div class="inspect-hint">Tap to dismiss</div>
+          <div class="inspect-hint">Click or press Esc to dismiss</div>
         </div>
       `;
     }
@@ -4577,12 +4625,12 @@
               <div class="hp-bar-long"><div class="hp-fill-long" style="width: ${(STATE.run.hp / STATE.run.maxHp) * 100}%"></div></div>
               ${player.block > 0 ? `<div class="block-display" style="margin-top: 8px;">${icon('block','icon-block')} ${player.block}</div>` : ''}
               <div class="energy-display">${energyOrbs}</div>
-              <div style="text-align:center; color: var(--text-muted); font-size: 0.8em;">Energy ${energy}/${energyMax}</div>
+              <div class="energy-label">Energy ${energy}/${energyMax}</div>
               <div class="statuses" style="justify-content: center;">${playerStatusHTML}</div>
               <div class="potion-row">${potionsHTML}</div>
             </div>
             <div class="hand-section">
-              <div style="font-size: 0.9em; color: var(--text-muted);">
+              <div class="pile-row">
                 Hand (${hand.length}/${LAYOUT.HAND_SIZE})
                 <button class="inline-chip-button" data-action="viewPile" data-pile="drawPile">Draw ${STATE.combat.drawPile.length}</button>
                 <button class="inline-chip-button" data-action="viewPile" data-pile="discardPile">Discard ${STATE.combat.discardPile.length}</button>
@@ -4590,8 +4638,8 @@
                 <button class="inline-chip-button" data-action="viewPile" data-pile="activePowers">Powers ${(STATE.combat.activePowers || []).length}</button>
                 <button class="inline-chip-button" data-action="viewPile" data-pile="deck">${icon('deck')} Deck ${STATE.run.deck.length}</button>
               </div>
-              ${activePowerHTML ? `<div style="font-size:0.85em; color: var(--text-muted);">Active Powers: ${activePowerHTML}</div>` : ''}
-              ${targeting ? '<div style="color: var(--color-gold); font-size: 0.85em;">Choose a target, or tap Cancel (or the selected card/potion again) to cancel.</div>' : ''}
+              ${activePowerHTML ? `<div class="active-powers">Active Powers: ${activePowerHTML}</div>` : ''}
+              ${targeting ? '<div class="targeting-hint">Choose a target, or click Cancel (or the selected card/potion again) to cancel.</div>' : ''}
               <div class="combat-hand">${handHTML}</div>
               <div class="combat-log">Log:<br>${logHTML}</div>
             </div>
@@ -4657,7 +4705,7 @@
           <div class="shop-item" ${clickable} style="${style}">
             ${iconHtml ? `<div class="shop-item-icon">${iconHtml}</div>` : ''}
             <div style="font-weight: bold; text-align: center; word-break: break-word; margin-bottom: 5px;">${label}</div>
-            ${desc ? `<div style="font-size:0.75em; color:var(--text-muted); margin-bottom:6px;">${desc}</div>` : ''}
+            ${desc ? `<div class="shop-item-desc">${desc}</div>` : ''}
             <div class="shop-item-price">${priceLabel}</div>
           </div>
         `;
@@ -5073,7 +5121,7 @@
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
 
-      AudioEngine.sfx('click');           // light UI tick on any actionable tap
+      AudioEngine.sfx('click');           // light UI tick on any actionable click
       const action = btn.dataset.action;
 
       // Any action other than opening another inspect dismisses the panel, so it
