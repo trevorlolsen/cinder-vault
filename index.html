@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The Cinder Vault</title>
   <style>
     * {
@@ -12,7 +12,8 @@
     }
 
     :root {
-      /* Explicit anchor: resists WebView font-boosting (pairs with text-size-adjust) */
+      /* Type anchor. Phase 2 replaces this with a viewport clamp; every font size
+         in the file is relative to it. */
       font-size: 16px;
 
       /* === Solarized Light (Ethan Schoonover) === */
@@ -30,59 +31,62 @@
       --color-gold: #b58900;     /* yellow */
       --color-elite: #cb4b16;    /* orange */
       --color-relic: #6c71c4;    /* violet */
-      --letterbox: #93a1a1;      /* stage frame color (neutral) */
+
+      /* Reserved gutter on the right of the status bar so it clears #mute-btn,
+         which is a fixed overlay outside #app. */
+      --mute-gutter: 3.25rem;
+    }
+
+    html {
+      height: 100%;
     }
 
     html, body {
       width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: var(--letterbox);
+      overflow: hidden;   /* every screen owns an internal scroller; see .screen */
+      background: var(--bg-dark);
+      /* Kept deliberately: this is on GitHub Pages, so phones will load it and
+         font-boosting would garble the min-size guard message. */
       -webkit-text-size-adjust: 100%;
       text-size-adjust: 100%;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
     }
 
     body {
+      height: 100dvh;
       font-family: 'Courier New', monospace;
       color: var(--text-primary);
       line-height: 1.4;
     }
 
-    /* Fixed 1024x600 design stage, scaled to fit the viewport (see fitStage() in JS) */
-    #stage {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 1024px;
-      height: 600px;
-      transform-origin: center center;
-      transform: translate(-50%, -50%) scale(var(--stage-scale, 1));
-      overflow: hidden;
-      background: var(--bg-dark);
-    }
-
+    /* The app IS the viewport. There is no design stage and no scaling: layout is
+       real flex/grid at native 1:1 pixels, and each screen scrolls internally. */
     #app {
       width: 100%;
-      height: 100%;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
       background: var(--bg-dark);
       color: var(--text-primary);
+    }
+
+    /* Text stays selectable (a desktop affordance), but controls and the cards you
+       drag past during play must not smear a selection. */
+    button, .map-node, .status-chip, .relic-chip, .potion-slot, .energy-orb,
+    .card-cost, .card-name, .card-type, .shop-item-price {
       user-select: none;
       -webkit-user-select: none;
     }
 
-    /* Persistent sound toggle — lives in #stage (never wiped by render), so it
-       is available on every screen including the menu. */
+    /* Persistent sound toggle — a body-level sibling of #app, so render() never
+       wipes it and it exists on every screen including the menu. It is the one
+       control outside #app, and so the one that does not use data-action. */
     #mute-btn {
-      position: absolute;
+      position: fixed;
       top: 6px;
       right: 8px;
-      width: 40px;
-      height: 40px;
+      width: 2rem;
+      height: 2rem;
       z-index: 500;
       display: flex;
       align-items: center;
@@ -92,7 +96,7 @@
       color: var(--text-primary);
       border-radius: 4px;
       font-family: inherit;
-      font-size: 1.15em;
+      font-size: 1.125rem;
       line-height: 1;
       cursor: pointer;
       opacity: 0.85;
@@ -224,7 +228,6 @@
       display: flex;
       flex-direction: column;
       overflow: auto;
-      -webkit-overflow-scrolling: touch;
       padding: 20px;
     }
 
@@ -373,18 +376,21 @@
       background: rgba(220, 50, 47, 0.12);
     }
 
-    /* Tap-to-inspect panel: floats over whatever screen is showing, including
-       the pile viewer and card picker overlays. */
+    /* Pinned inspect panel: floats over whatever screen is showing, including
+       the pile viewer and card picker overlays.
+       `fixed` now resolves against the real viewport (there is no transformed
+       ancestor any more). Never add a transform to an ancestor of this element —
+       that would re-create the containment bug the stage used to have. */
     .inspect-panel {
       position: fixed;
       left: 50%;
-      /* Clear of the combat control row so it never covers End Turn. (#stage is
-         transformed, so `fixed` resolves against the stage, not the viewport.) */
-      bottom: 76px;
+      /* Clear of the combat control row so it never covers End Turn. Phase 5 moves
+         End Turn into the dock's right column, after which this can be 2rem. */
+      bottom: calc(var(--dock-h, 7.5rem) + 1rem);
       transform: translateX(-50%);
       z-index: 60;
       min-width: 220px;
-      max-width: min(420px, 88vw);
+      max-width: min(28rem, 60vw);
       padding: 10px 14px;
       background: var(--bg-panel);
       border: 2px solid var(--color-relic);
@@ -657,9 +663,10 @@
     .combat-hand {
       display: flex;
       gap: 8px;
+      /* Phase 5 replaces this with overflow: visible once the hand is laid out to
+         fit 10 cards; until then the scroller is what keeps them reachable. */
       overflow-x: auto;
       flex-wrap: nowrap;
-      -webkit-overflow-scrolling: touch;
     }
 
     .card {
@@ -1044,28 +1051,36 @@
       border-radius: 3px;
     }
 
-    /* The fixed 1024x600 stage (see #stage) scales as one unit, so the old
-       max-width:760px responsive tier is obsolete. Instead, guard orientation:
-       the game is landscape-only, so prompt to rotate in portrait. */
-    @media (orientation: portrait) {
-      #stage { display: none; }
+    /* Minimum supported window. The floor is derived, not chosen: a 10-card hand
+       at >=92px cards needs >=972px of width, and the combat band budget needs
+       ~645px of height. Retune BOTH numbers here after any combat layout change.
+       #mute-btn and #fx-layer must be hidden too, and z-index must beat the
+       9999 on #fx-layer, or they float over the message. */
+    @media (max-width: 999px), (max-height: 659px) {
+      #app, #mute-btn, #fx-layer { display: none; }
       body::after {
-        content: "Rotate your device to landscape";
+        content: "The Cinder Vault needs a window at least 1000 x 660. Resize or maximise your browser.";
         position: fixed;
         inset: 0;
+        z-index: 10000;
         display: flex;
         align-items: center;
         justify-content: center;
         text-align: center;
-        padding: 40px;
+        padding: 2.5rem;
         font-family: 'Courier New', monospace;
-        font-size: 1.2em;
+        font-size: 1.125rem;
         color: var(--text-primary);
         background: var(--bg-dark);
       }
     }
 
-    /* Scrollbar styling */
+    /* Scrollbar styling. The -webkit-* block covers older WebKit; the standard
+       properties cover Firefox and are what modern Chromium honours. */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-color) var(--bg-dark);
+    }
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -1130,7 +1145,9 @@
   </style>
 </head>
 <body>
-  <div id="stage"><div id="app"></div><button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">&#9834;</button></div>
+  <div id="app"></div>
+  <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">&#9834;</button>
+  <div id="fx-layer"></div>
   <script>
     // ============ 1. CONSTANTS ============
     const SCREENS = {
@@ -5556,15 +5573,6 @@
       return results;
     }
 
-    // Scale the fixed 1024x600 design stage to fill the viewport, preserving
-    // aspect ratio (letterboxed). Recomputed on resize / orientation change.
-    function fitStage() {
-      const stage = document.getElementById('stage');
-      if (!stage) return;
-      const s = Math.min(window.innerWidth / 1024, window.innerHeight / 600);
-      stage.style.setProperty('--stage-scale', s);
-    }
-
     function initApp() {
       STATE = { screen: SCREENS.MENU, run: null, combat: null, ui: {}, seed: null, ascension: 0 };
       validateContent();
@@ -5580,9 +5588,6 @@
         continueEndless: () => continueEndlessRun(STATE),
         startSeed: (seed, characterId, ascension) => { startNewRun({ seed, characterId: characterId || 'cinder-knight', ascension: ascension || 0 }); goTo(SCREENS.MAP); }
       };
-      window.addEventListener('resize', fitStage);
-      window.addEventListener('orientationchange', () => setTimeout(fitStage, 100));
-      fitStage();
 
       // Persistent sound toggle + first-gesture audio unlock.
       const muteBtn = document.getElementById('mute-btn');
