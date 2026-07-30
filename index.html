@@ -4763,15 +4763,38 @@
       const musicEl = new Audio();
       musicEl.loop = true;
       musicEl.volume = MUSIC_VOL;
-      const sfxCache = {};
+      // A bounded pool of players per sound, grown on demand.
+      //
+      // This used to be one cached element per sound that sfx() cloneNode()'d on
+      // every play, so overlapping repeats wouldn't cut each other off. The clone
+      // was then dropped on the floor -- but a media element that is playing is
+      // kept alive by the browser, and Chrome caps WebMediaPlayers per frame, so
+      // the cap was reached long before GC ever collected them. Measured at ~133
+      // leaked players per 16-floor run. Because "New Run" re-renders instead of
+      // reloading the page, they accumulated across runs in one session until
+      // every sound effect silently stopped. Music kept working (it is a single
+      // reused element), which made it easy to miss.
+      //
+      // Reusing finished players instead caps the total at SFX_POOL_MAX per key,
+      // and only for keys actually played. Overlap still works; past the cap the
+      // oldest instance restarts, which is inaudible for sounds this short.
+      const SFX_POOL_MAX = 4;
+      const sfxPool = {};   // key -> HTMLAudioElement[]
 
-      function loadSfx(key) {
-        if (!sfxCache[key] && SFX_FILES[key]) {
-          const a = new Audio(SFX_FILES[key]);
-          a.preload = 'auto';
-          sfxCache[key] = a;
+      function sfxNode(key) {
+        const src = SFX_FILES[key];
+        if (!src) return null;
+        const pool = sfxPool[key] || (sfxPool[key] = []);
+        for (const a of pool) {
+          if (a.paused || a.ended) return a;      // finished: take it back
         }
-        return sfxCache[key];
+        if (pool.length < SFX_POOL_MAX) {
+          const a = new Audio(src);
+          a.preload = 'auto';
+          pool.push(a);
+          return a;
+        }
+        return pool[0];                            // all busy at the cap
       }
 
       function playMusicKey(key) {
@@ -4808,11 +4831,13 @@
         },
         sfx(key) {
           if (muted || !unlocked) return;
-          const base = loadSfx(key);
-          if (!base) return;
+          const node = sfxNode(key);
+          if (!node) return;
           try {
-            const node = base.cloneNode();
             node.volume = SFX_VOL[key] || SFX_VOL._default;
+            // Rewind a reused player. Guarded: setting currentTime before any
+            // metadata has loaded throws, and a fresh element is already at 0.
+            if (node.currentTime) node.currentTime = 0;
             const p = node.play();
             if (p && p.catch) p.catch(() => {});
           } catch (e) {}
