@@ -4718,16 +4718,27 @@
     // ============ AUDIO ENGINE ============
     // Music (one looping element) + SFX (cached, cloned so they overlap).
     // Assets live in assets/audio/. Autoplay is unlocked on the first user
-    // gesture (mobile WebViews block it). Mute persists in localStorage.
-    // Music WAVs loop gaplessly; transcode to OGG later to shrink the payload.
+    // gesture. Mute persists in localStorage.
+    //
+    // Music was 48MB of WAV, which is a fine payload inside an APK and an absurd
+    // one over HTTP. It ships as Vorbis now (3.5MB, q3) — chosen over MP3 as the
+    // primary because these tracks loop, and MP3's encoder padding puts an
+    // audible gap at the seam. Safari has never played Ogg in <audio>, so an MP3
+    // set is there for it; LAME writes gapless headers, so the seam is tolerable.
+    // Only one set is ever downloaded. SFX were already MP3 and are ~470KB total.
     const AudioEngine = (function () {
       const BASE = 'assets/audio/';
+      const MUSIC_EXT = (function () {
+        const probe = document.createElement('audio');
+        // canPlayType returns 'probably' | 'maybe' | '' — anything non-empty will do.
+        return probe.canPlayType && probe.canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'mp3';
+      })();
       const MUSIC_FILES = {
-        menu:    BASE + 'music/menu.wav',
-        combat:  BASE + 'music/combat.wav',
-        boss:    BASE + 'music/boss.wav',
-        victory: BASE + 'music/victory.wav',
-        defeat:  BASE + 'music/defeat.wav',
+        menu:    BASE + 'music/menu.'    + MUSIC_EXT,
+        combat:  BASE + 'music/combat.'  + MUSIC_EXT,
+        boss:    BASE + 'music/boss.'    + MUSIC_EXT,
+        victory: BASE + 'music/victory.' + MUSIC_EXT,
+        defeat:  BASE + 'music/defeat.'  + MUSIC_EXT,
       };
       const SFX_FILES = {
         click:  BASE + 'sfx/click.wav',
