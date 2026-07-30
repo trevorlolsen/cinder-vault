@@ -204,20 +204,38 @@
     }
 
     /* === Status Bar === */
+    /* Emitted by render() for every in-run screen (see statusBarHTML), so it is a
+       flex sibling of .screen inside #app rather than part of any one screen. */
     .status-bar {
+      flex: 0 0 auto;
       background: var(--bg-panel);
       border-bottom: 2px solid var(--border-color);
-      padding: 8px 56px 8px 16px;   /* extra right pad clears the #mute-btn corner control */
+      padding: 0.5rem var(--mute-gutter) 0.5rem 1rem;   /* right gutter clears #mute-btn */
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
       font-size: var(--fs-md);
     }
 
+    /* Wrapping matters late in a run: 8-12 relics used to squeeze the HP and gold
+       readouts instead of moving to a second row. */
     .status-left, .status-right {
       display: flex;
-      gap: 20px;
+      gap: 0.75rem;
       align-items: center;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .status-right { justify-content: flex-end; }
+
+    .relic-tray {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      justify-content: flex-end;
     }
 
     .status-item {
@@ -704,16 +722,20 @@
     }
 
     /* Status-bar potion: the slot itself uses/quaffs, the corner button dumps it
-       so a full belt never blocks a better drop. */
+       so a full belt never blocks a better drop.
+       The padding is load-bearing: .potion-discard is absolutely positioned into
+       the top-right corner, and without room reserved for it the button hung 5px
+       outside the wrapper and overflowed .potion-row. */
     .potion-slot-wrap {
       position: relative;
       display: inline-flex;
+      padding: 0.3rem 0.3rem 0 0;
     }
 
     .potion-discard {
       position: absolute;
-      top: -5px;
-      right: -5px;
+      top: 0;
+      right: 0;
       width: 1.125rem;
       height: 1.125rem;
       padding: 0;
@@ -4564,6 +4586,27 @@
       };
     })();
 
+    // Screens that show the run's HP / gold / floor / relics / potions. Everything
+    // mid-run does; the menu has no run, and victory/defeat print their own stats.
+    const SCREENS_WITH_STATUS = new Set([
+      SCREENS.BOON, SCREENS.MAP, SCREENS.COMBAT, SCREENS.REST,
+      SCREENS.SHOP, SCREENS.EVENT, SCREENS.CARD_REWARD, SCREENS.TREASURE
+    ]);
+
+    // The bar used to be emitted by renderMap and renderCombat only, so on rest,
+    // shop, event, reward, treasure and the overlays your HP and relics were simply
+    // invisible. Emitting it here covers every screen from one place.
+    //
+    // NOTE: it must stay INSIDE #app. The delegated click listener is bound once to
+    // #app, so moving the bar to a body-level sibling would silently kill every
+    // data-action it contains (viewPile, usePotion, discardPotion, relic inspect) —
+    // no error, the buttons would just stop responding.
+    function statusBarHTML() {
+      if (!STATE.run) return '';
+      if (STATE.ui && (STATE.ui.pileViewer || STATE.ui.picker)) return renderStatusBar();
+      return SCREENS_WITH_STATUS.has(STATE.screen) ? renderStatusBar() : '';
+    }
+
     function render() {
       const app = document.getElementById('app');
 
@@ -4572,11 +4615,11 @@
       // of any screen, overlays included.
       let html = '';
       if (STATE.ui && STATE.ui.pileViewer) {
-        app.innerHTML = renderPileViewer() + renderInspectPanel();
+        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel();
         return;
       }
       if (STATE.ui && STATE.ui.picker) {
-        app.innerHTML = renderCardPicker() + renderInspectPanel();
+        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel();
         return;
       }
 
@@ -4616,7 +4659,7 @@
           break;
       }
 
-      app.innerHTML = html + renderInspectPanel();
+      app.innerHTML = statusBarHTML() + html + renderInspectPanel();
       if (STATE.screen === SCREENS.MAP) requestAnimationFrame(scrollMapToFocus);
       AudioEngine.updateMusic(STATE);
     }
@@ -4756,7 +4799,6 @@
 
       return `
         <div class="screen">
-          ${renderStatusBar()}
           <div class="map-screen">
             <div class="map-canvas" style="width:${canvasW}px; height:${canvasH}px;">
               <svg class="map-edges" viewBox="0 0 ${canvasW} ${canvasH}" preserveAspectRatio="none">${edgesHTML}</svg>
@@ -5022,7 +5064,6 @@
 
       return `
         <div class="screen combat-screen">
-          ${renderStatusBar()}
           <div class="combat-body">
             <div class="combat-main">
               <div class="combat-enemies">${enemyHTML}</div>
@@ -5496,7 +5537,7 @@
           </div>
           <div class="status-right">
             <div class="potion-row">${potionChips}</div>
-            ${relicChips}
+            <div class="relic-tray">${relicChips}</div>
           </div>
         </div>
       `;
