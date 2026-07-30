@@ -328,7 +328,13 @@
       flex-direction: column;
       overflow: auto;
       padding: 1.25rem;
+      cursor: grab;
     }
+
+    /* Belt-and-braces alongside the click-suppression in initMapDrag: a node
+       cannot be the drag's click target if it takes no pointer events. */
+    .map-screen.dragging { cursor: grabbing; }
+    .map-screen.dragging .map-node { pointer-events: none; }
 
     /* The canvas takes the width it is given and the geometry follows: node
        `left` is a PERCENTAGE of canvasW and the edge SVG carries
@@ -529,9 +535,9 @@
     .inspect-panel {
       position: fixed;
       left: 50%;
-      /* Clear of the combat control row so it never covers End Turn. Phase 5 moves
-         End Turn into the dock's right column, after which this can be 2rem. */
-      bottom: calc(var(--dock-h, 7.5rem) + 1rem);
+      /* End Turn lives in the dock's RIGHT column, so a horizontally-centred
+         panel cannot cover it — this no longer has to clear the whole dock. */
+      bottom: 2rem;
       transform: translateX(-50%);
       z-index: 60;
       min-width: 220px;
@@ -543,6 +549,50 @@
       box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
       cursor: pointer;
       text-align: center;
+    }
+
+    /* Keyboard reference (?). A full-screen scrim inside #app, so the delegated
+       click handler dismisses it wherever you click. */
+    .key-help {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    .key-help-panel {
+      max-width: min(32rem, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      padding: 1.75rem 2rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-panel);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .key-help-list {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.5rem 1rem;
+      align-items: baseline;
+      margin: 1rem 0;
+    }
+    .key-help-list dt { margin: 0; }
+    .key-help-list dd { margin: 0; color: var(--text-muted); }
+    .key-help-list kbd {
+      display: inline-block;
+      padding: 0.125rem 0.4rem;
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      background: var(--bg-dark);
+      font-family: inherit;
+      font-size: var(--fs-sm);
+      white-space: nowrap;
     }
 
     .inspect-title {
@@ -859,20 +909,43 @@
       background: var(--bg-dark);
       padding: 8px;
       cursor: pointer;
-      transition: all 0.2s;
-      position: relative;
+      /* Named properties, not `all`: `all` also animates border-color and
+         opacity, which made the unaffordable/lethal state changes lag a frame
+         behind the energy they describe. */
+      transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+      position: relative;   /* required for the :hover z-index below */
       display: flex;
       flex-direction: column;
       gap: 5px;
     }
 
+    /* A real lift, not just a scale. Safe to transform: a .card is never an
+       ancestor of .inspect-panel or #tooltip, so this cannot re-create the
+       position:fixed containment bug the old stage had. Phase 5's
+       `.combat-hand { overflow: visible }` is what stops it being clipped. */
     .card:hover {
-      transform: scale(1.05);
+      transform: translateY(-0.75rem) scale(1.04);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
       border-color: var(--text-primary);
+      z-index: 10;          /* lift above its neighbours in the hand */
+    }
+
+    /* The card awaiting a target reads as held: it stays lifted without hover. */
+    .card.pending {
+      transform: translateY(-1.25rem);
+      border-color: var(--color-gold);
+      box-shadow: 0 0 0 2px var(--color-gold), 0 8px 18px rgba(0, 0, 0, 0.3);
+      z-index: 11;
     }
 
     .card.unaffordable {
       opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .card.unaffordable:hover {
+      transform: none;
+      box-shadow: none;
     }
 
     .card.unaffordable .card-cost {
@@ -1218,6 +1291,22 @@
     .card.disabled-choice { opacity: 0.45; cursor: not-allowed; }
     .card.disabled-choice:hover { transform: none; box-shadow: none; }
 
+    /* Mouse affordances. The tablet build had no cursor to speak of, so nothing
+       here distinguished "you can click this" from "you cannot" except colour.
+       .card carries its own cursor rules above. */
+    .map-node.available, .choice-button, .menu-button, .end-turn-btn,
+    .inline-chip-button, .potion-slot, .status-chip, .relic-chip, .skip-button,
+    .leave-button, .new-run-button, .shop-item, #mute-btn { cursor: pointer; }
+    .potion-slot.empty { cursor: default; }
+    .disabled-choice { cursor: not-allowed; }
+
+    /* Targeting: the enemy you are about to hit should say so under the cursor. */
+    .enemy-panel.targetable { cursor: crosshair; }
+    .enemy-panel.targetable:hover {
+      border-color: var(--text-primary);
+      background: rgba(88, 110, 117, 0.12);
+    }
+
     /* Muted sibling of .card-lethal-warning: why a card can't be picked. */
     .card-note {
       margin-top: auto;
@@ -1475,10 +1564,12 @@
     /* Minimum supported window. The floor is derived, not chosen: a 10-card hand
        at >=92px cards needs >=972px of width, and the combat band budget needs
        ~645px of height. Retune BOTH numbers here after any combat layout change.
-       #mute-btn and #fx-layer must be hidden too, and z-index must beat the
-       9999 on #fx-layer, or they float over the message. */
+       #mute-btn, #fx-layer and #tooltip must be hidden too, and z-index must beat
+       the 9999 on #fx-layer, or they float over the message. (#tooltip cannot be
+       triggered once #app is gone, but one already open when the window shrinks
+       would linger.) */
     @media (max-width: 999px), (max-height: 659px) {
-      #app, #mute-btn, #fx-layer { display: none; }
+      #app, #mute-btn, #fx-layer, #tooltip { display: none; }
       body::after {
         content: "The Cinder Vault needs a window at least 1000 x 660. Resize or maximise your browser.";
         position: fixed;
@@ -1578,12 +1669,33 @@
     /* Transient combat effect sprites (pixel-art), layered above everything, click-through. */
     #fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
     .fx-sprite { position: fixed; image-rendering: pixelated; pointer-events: none; will-change: transform, opacity; }
+
+    /* Hover tooltip. Lives outside #app so render() never destroys it, and is
+       pointer-events:none because a hoverable tooltip would sit under the cursor
+       and steal its own mouseout. */
+    #tooltip[hidden] { display: none; }
+    #tooltip {
+      position: fixed;
+      z-index: 600;
+      pointer-events: none;
+      max-width: 24rem;
+      padding: 0.625rem 0.875rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-panel);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+      font-size: var(--fs-sm);
+      line-height: 1.4;
+      text-align: left;
+    }
+    .tooltip-title { font-weight: bold; margin-bottom: 0.25rem; }
+    .tooltip-body { color: var(--text-muted); white-space: pre-line; }
   </style>
 </head>
 <body>
   <div id="app"></div>
   <button id="mute-btn" title="Toggle sound" aria-label="Toggle sound">&#9834;</button>
   <div id="fx-layer"></div>
+  <div id="tooltip" role="tooltip" hidden></div>
   <script>
     // ============ 1. CONSTANTS ============
     const SCREENS = {
@@ -3102,11 +3214,6 @@
       return (STATUS_INFO[statusName] && STATUS_INFO[statusName].short) || statusName.slice(0, 3);
     }
 
-    function statusTitle(statusName, value) {
-      const info = STATUS_INFO[statusName];
-      return `${statusLabel(statusName)}: ${value}${info ? ' — ' + info.desc : ''}`;
-    }
-
     function healRun(game, amount, source) {
       if (!game || !game.run) return 0;
       const before = game.run.hp;
@@ -3261,6 +3368,9 @@
     function rehydrateState(game) {
       if (!game) return game;
       game.ui = game.ui || {};
+      // saveGame() serialises all of STATE, so this would otherwise come back
+      // with the help overlay up. It is a keypress away; it is not run state.
+      game.ui.keyHelp = false;
       game.act = game.act || 1;
       if (game.combat && game.combat.enemies) {
         for (const enemy of game.combat.enemies) enemy.template = ENEMIES_DB[enemy.defId];
@@ -4740,11 +4850,11 @@
       // of any screen, overlays included.
       let html = '';
       if (STATE.ui && STATE.ui.pileViewer) {
-        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel();
+        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + renderKeyHelp();
         return;
       }
       if (STATE.ui && STATE.ui.picker) {
-        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel();
+        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + renderKeyHelp();
         return;
       }
 
@@ -4784,7 +4894,7 @@
           break;
       }
 
-      app.innerHTML = statusBarHTML() + html + renderInspectPanel();
+      app.innerHTML = statusBarHTML() + html + renderInspectPanel() + renderKeyHelp();
       if (STATE.screen === SCREENS.MAP) requestAnimationFrame(scrollMapToFocus);
       AudioEngine.updateMusic(STATE);
     }
@@ -4810,7 +4920,7 @@
           <div class="menu-character-name">${ch.name}</div>
           <div class="menu-blurb">${ch.blurb}</div>
           <div class="asc-row">
-            ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" title="${attrEscape(describeAscension(a))}">Start A${a}</button>`).join('')}
+            ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" data-ititle="Ascension ${a}" data-ibody="${attrEscape(describeAscension(a))}">Start A${a}</button>`).join('')}
           </div>
         </div>
       `).join('');
@@ -4923,7 +5033,7 @@
         return `
           <div class="map-node ${statusClass} ${typeClass}" style="left:${(pos.x / canvasW * 100).toFixed(3)}%; top:${pos.y}px;"
                data-nodeid="${node.id}" ${isAvailable ? `data-action="travelNode"` : ''}
-               title="${label}">
+               data-ititle="${attrEscape(label)}" data-ibody="${attrEscape(`Floor ${node.floor}.${isAvailable ? ' Click to travel here.' : isCurrent ? ' You are here.' : node.visited ? ' Already visited.' : ' Not reachable from where you stand.'}`)}">
             <div class="map-node-icon">${nodeIcon(node.type)}</div>
             <div class="map-node-type">${node.type === NODE_TYPES.BOSS ? 'BOSS' : node.type}</div>
           </div>
@@ -4973,7 +5083,9 @@
     //   note             muted bottom banner, e.g. why a card is ineligible.
     //   warning          red bottom banner (the hand's LETHAL COST notice).
     //   extraClass       'unaffordable', 'lethal-cost', ...
-    //   titleSuffix      appended to the native title.
+    //   titleSuffix      extra line for the hover tooltip body (e.g. the lethal
+    //                    blood-cost warning). Named for the native title= it used
+    //                    to feed, which the tooltip replaced.
     function cardFaceHTML(cardOrDef, opts) {
       opts = opts || {};
       const defId = cardOrDef.defId || cardOrDef.id;
@@ -4988,13 +5100,22 @@
       const hook = opts.action
         ? `data-action="${opts.action}"${opts.dataAttr ? ` ${opts.dataAttr}="${opts.dataValue}"` : ''}`
         : '';
+      const desc = describeCard(cardOrDef, opts.previewUpgraded);
+      // Hover-tooltip anchor, emitted directly rather than via inspectAttrs():
+      // that helper bundles data-action="inspect", which would fight the card's
+      // own selectCard hook. The face already shows this text, but at --card-min
+      // (92px) it is cramped, and the tooltip is where the note/warning read
+      // properly. No data-action here, so the click path is untouched.
+      const tip =
+        `data-ititle="${attrEscape(def.name + (isUpgraded ? '+' : ''))}" ` +
+        `data-ibody="${attrEscape([desc, opts.warning, opts.note, opts.titleSuffix].filter(Boolean).join('\n'))}"`;
       return `
-        <div class="${classes.join(' ')}" ${hook} title="${attrEscape(def.name + (opts.titleSuffix || ''))}">
+        <div class="${classes.join(' ')}" ${hook} ${tip}>
           <div class="card-cost">${def.cost}</div>
           <div class="card-name">${def.name}${isUpgraded ? '+' : ''}</div>
           <div class="card-art">${cardArtIcon(defId, def.type)}</div>
           <div class="card-type">${typeIcon(def.type)} ${def.type}</div>
-          <div class="card-desc">${describeCard(cardOrDef, opts.previewUpgraded)}</div>
+          <div class="card-desc">${desc}</div>
           ${opts.warning ? `<div class="card-lethal-warning">${opts.warning}</div>` : ''}
           ${opts.note ? `<div class="card-note">${opts.note}</div>` : ''}
         </div>
@@ -5161,6 +5282,34 @@
       `;
     }
 
+    // Static content, so it rides on render() like the inspect panel rather than
+    // being its own DOM node — a STATE.ui.keyHelp flag matches the existing
+    // overlay pattern and needs no separate listener. Stays inside #app so the
+    // delegated handler still sees its data-action.
+    const KEY_HELP = [
+      ['1 – 9, 0', 'Play the nth card in hand (0 is the tenth)'],
+      ['1 – 9', 'While targeting: pick the nth living enemy'],
+      ['E', 'End turn'],
+      ['D', 'Open your deck'],
+      ['Esc', 'Dismiss a panel, close the deck, or cancel targeting'],
+      ['?', 'Show or hide this list'],
+    ];
+
+    function renderKeyHelp() {
+      if (!STATE.ui || !STATE.ui.keyHelp) return '';
+      return `
+        <div class="key-help" data-action="closeKeyHelp">
+          <div class="key-help-panel">
+            <div class="panel-title">Keyboard</div>
+            <dl class="key-help-list">
+              ${KEY_HELP.map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join('')}
+            </dl>
+            <div class="inspect-hint">Click anywhere or press ? or Esc to dismiss</div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderCombat() {
       const { enemies, player, hand, energy, energyMax, log } = STATE.combat;
 
@@ -5176,7 +5325,7 @@
         const hpPercent = Math.max(0, Math.min(100, (enemy.hp / enemy.maxHp) * 100));
         const statusHTML = Object.entries(enemy.statuses).filter(([k, v]) => v > 0).map(([k, v]) => {
           const info = STATUS_INFO[k];
-          return `<div class="status-chip" title="${statusTitle(k, v)}" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
+          return `<div class="status-chip" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
         }).join('');
 
         const it = enemy.intent ? enemy.intent.type : 'UNKNOWN';
@@ -5191,7 +5340,8 @@
           : '';
 
         return `
-          <div class="enemy-panel ${targeting ? 'targetable' : ''} ${lethal ? 'lethal-target' : ''}" data-enemyuid="${enemy.uid}" ${targeting ? `data-action="targetEnemy"` : ''} title="${intentDesc[it] || ''}">
+          <div class="enemy-panel ${targeting ? 'targetable' : ''} ${lethal ? 'lethal-target' : ''}" data-enemyuid="${enemy.uid}" ${targeting ? `data-action="targetEnemy"` : ''}
+               data-ititle="${attrEscape(enemy.name)}" data-ibody="${attrEscape(`${enemy.hp}/${enemy.maxHp} HP.\nNext turn: ${intentDesc[it] || 'unknown'}${intentValue !== '' ? ' for ' + intentValue : ''}.`)}">
             <div class="enemy-intent" ${inspectAttrs(enemy.name + ' — ' + (intentDesc[it] || 'Unknown'), `Next turn: ${intentDesc[it] || 'unknown'}${intentValue !== '' ? ' for ' + intentValue : ''}.`)}>${intentIcon} ${intentValue}</div>
             <div class="enemy-body">
               <div class="enemy-portrait">${enemyIcon(enemy.defId)}</div>
@@ -5210,20 +5360,20 @@
 
       const playerStatusHTML = Object.entries(player.statuses).filter(([k, v]) => v > 0).map(([k, v]) => {
         const info = STATUS_INFO[k];
-        return `<div class="status-chip" title="${statusTitle(k, v)}" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
+        return `<div class="status-chip" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
       }).join('');
 
       const energyOrbs = Array(Math.max(energyMax, energy)).fill(0).map((_, i) => `<div class="energy-orb ${i < energy ? 'full' : 'empty'}">${i < energy ? icon('energy') : ''}</div>`).join('');
       const activePowerHTML = (STATE.combat.activePowers || []).map(card => {
         const def = CARDS_DB[card.defId];
-        return def ? `<span class="active-power-chip" title="${describeCard(card)}" ${inspectAttrs(def.name + (card.upgraded ? '+' : ''), describeCard(card))}>${def.name}${card.upgraded ? '+' : ''}</span>` : '';
+        return def ? `<span class="active-power-chip" ${inspectAttrs(def.name + (card.upgraded ? '+' : ''), describeCard(card))}>${def.name}${card.upgraded ? '+' : ''}</span>` : '';
       }).join('');
 
       const potionsHTML = STATE.run.potions.map((pid, slot) => {
-        if (!pid) return `<div class="potion-slot empty" title="Empty potion slot">·</div>`;
+        if (!pid) return `<div class="potion-slot empty" data-ititle="Empty potion slot" data-ibody="Potions you pick up land here.">·</div>`;
         const pdef = POTIONS_DB[pid];
         const selected = STATE.combat.pendingPotionSlot === slot;
-        return `<div class="potion-slot" data-action="usePotion" data-slot="${slot}" title="${pdef.name}: ${pdef.desc || 'Use potion'}${selected ? ' — select a target or press Esc' : ''}">${potionIcon(pid)}</div>`;
+        return `<div class="potion-slot" data-action="usePotion" data-slot="${slot}" data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || 'Use potion.') + (selected ? '\nSelect a target, or press Esc to cancel.' : ''))}">${potionIcon(pid)}</div>`;
       }).join('');
 
       const handHTML = hand.map(card => {
@@ -5236,7 +5386,13 @@
           action: 'selectCard',
           dataAttr: 'data-carduid',
           dataValue: card.uid,
-          extraClass: [affordable ? '' : 'unaffordable', lethal ? 'lethal-cost' : ''].filter(Boolean).join(' '),
+          extraClass: [
+            affordable ? '' : 'unaffordable',
+            lethal ? 'lethal-cost' : '',
+            // The card awaiting a target stays lifted, so "which one did I pick?"
+            // is answerable without reading the targeting hint.
+            card.uid === STATE.combat.pendingCardUid ? 'pending' : ''
+          ].filter(Boolean).join(' '),
           warning: lethal ? 'LETHAL COST' : '',
           titleSuffix: lethal ? ` — WARNING: its ${hpCost} HP cost would kill you` : ''
         });
@@ -5345,7 +5501,9 @@
 
       const shopItem = (label, price, sold, canBuy, action, dataAttr, desc, iconHtml) => {
         const affordable = !sold && canBuy && gold >= price;
-        const style = sold ? 'opacity:0.35; cursor:default;' : (!affordable ? 'opacity:0.55; cursor:default;' : '');
+        // Sold is inert; unaffordable is something you could buy with more gold,
+        // so the cursor distinguishes them.
+        const style = sold ? 'opacity:0.35; cursor:default;' : (!affordable ? 'opacity:0.55; cursor:not-allowed;' : '');
         const clickable = sold || !affordable ? '' : `data-action="${action}" ${dataAttr}`;
         const priceLabel = sold ? 'SOLD' : `${icon('gold')} ${price}`;
         return `
@@ -5703,16 +5861,16 @@
       const relicChips = STATE.run.relics.map(relic => {
         const relicDef = RELICS_DB[relic];
         const abbr = relicDef.short || relic.substring(0, 2).toUpperCase();
-        return `<div class="relic-chip" title="${relicDef.name}: ${relicDef.description}" ${inspectAttrs(relicDef.name, relicDef.description)}>${relicIcon(relic, abbr)}</div>`;
+        return `<div class="relic-chip" ${inspectAttrs(relicDef.name, relicDef.description)}>${relicIcon(relic, abbr)}</div>`;
       }).join('');
       const potionChips = STATE.run.potions.map((pid, slot) => {
-        if (!pid) return `<div class="potion-slot empty" title="Empty potion slot">·</div>`;
+        if (!pid) return `<div class="potion-slot empty" data-ititle="Empty potion slot" data-ibody="Potions you pick up land here.">·</div>`;
         const pdef = POTIONS_DB[pid];
         const usable = STATE.combat || pdef.usableOutOfCombat;
         return `
           <div class="potion-slot-wrap">
-            <div class="potion-slot" ${usable ? `data-action="usePotion" data-slot="${slot}"` : ''} title="${pdef.name}: ${pdef.desc || ''}${!STATE.combat && !pdef.usableOutOfCombat ? ' (combat only)' : ''}">${potionIcon(pid)}</div>
-            <button class="potion-discard" data-action="discardPotion" data-slot="${slot}" title="Discard ${pdef.name} to free the slot">×</button>
+            <div class="potion-slot" ${usable ? `data-action="usePotion" data-slot="${slot}"` : ''} data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || '') + (!STATE.combat && !pdef.usableOutOfCombat ? '\nCombat only.' : ''))}">${potionIcon(pid)}</div>
+            <button class="potion-discard" data-action="discardPotion" data-slot="${slot}" data-ititle="Discard" data-ibody="${attrEscape('Throw away ' + pdef.name + ' to free the slot.')}">×</button>
           </div>
         `;
       }).join('');
@@ -5766,6 +5924,135 @@
     }
 
     // ============ 11. HANDLERS ============
+
+    // Hover tooltips. DOM-only and deliberately OUTSIDE render(): inspect state
+    // lives in STATE.ui.inspect and dismissing it goes through render(), which
+    // rewrites app.innerHTML wholesale. Doing that on mouseover would rebuild the
+    // DOM on every pointer movement and destroy the very element being hovered,
+    // so the tooltip would flicker and the mouseout would never fire on the
+    // original node. Click-to-pin still goes through STATE.ui.inspect.
+    //
+    // Anchors are any element carrying data-ititle (inspectAttrs emits them on
+    // relics, status chips, potions and enemy intents; cardFaceHTML emits them
+    // directly, since a card's click must stay selectCard).
+    const Tooltip = (function () {
+      const tip = document.getElementById('tooltip');
+      const DELAY = 120;      // hover-intent: don't flash while sweeping a 10-card hand
+      const GAP = 8;
+      let timer = null;
+      let current = null;
+
+      function hide() {
+        clearTimeout(timer);
+        current = null;
+        tip.hidden = true;
+        tip.setAttribute('aria-hidden', 'true');
+      }
+
+      function show(el) {
+        tip.innerHTML =
+          `<div class="tooltip-title">${el.dataset.ititle}</div>` +
+          (el.dataset.ibody ? `<div class="tooltip-body">${el.dataset.ibody}</div>` : '');
+        // Park at the origin before measuring: measuring at the previous position
+        // can be a position where the box is clamped, which rewraps the text and
+        // gives a width that no longer applies once it moves.
+        tip.style.left = '0px';
+        tip.style.top = '0px';
+        tip.hidden = false;
+        const r = el.getBoundingClientRect();
+        const t = tip.getBoundingClientRect();
+        // Prefer above the anchor; flip below when that would clip the top edge.
+        const top = r.top - t.height - GAP >= GAP ? r.top - t.height - GAP : r.bottom + GAP;
+        const left = Math.min(
+          Math.max(GAP, r.left + r.width / 2 - t.width / 2),
+          window.innerWidth - t.width - GAP
+        );
+        tip.style.left = `${Math.round(left)}px`;
+        tip.style.top = `${Math.round(top)}px`;
+        tip.setAttribute('aria-hidden', 'false');
+      }
+
+      const app = document.getElementById('app');
+
+      app.addEventListener('mouseover', (e) => {
+        const el = e.target.closest('[data-ititle]');
+        if (!el || el === current) return;
+        current = el;
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (current === el) show(el); }, DELAY);
+      });
+
+      app.addEventListener('mouseout', (e) => {
+        if (!e.target.closest('[data-ititle]')) return;
+        // Moves that stay inside the SAME anchor are not a real exit. Without
+        // this, crossing from .card onto its own .card-desc hides the tooltip and
+        // the following mouseover bails on `el === current`, so it never returns.
+        const next = e.relatedTarget && e.relatedTarget.closest
+          ? e.relatedTarget.closest('[data-ititle]')
+          : null;
+        if (next === current) return;
+        hide();
+      });
+
+      // render() can remove the hovered element without any mouseout firing (a
+      // click re-renders the whole screen), which would strand the tooltip over a
+      // dead anchor. Scrolling the map moves the anchor out from under it too.
+      app.addEventListener('click', hide);
+      app.addEventListener('scroll', hide, true);   // capture: scroll doesn't bubble
+      window.addEventListener('blur', hide);
+
+      return { hide };
+    })();
+
+    // Drag-panning the map. Wheel scrolling needs no code — .map-screen is
+    // overflow:auto, so the browser already does it.
+    //
+    // The threshold is the whole point: without it a drag that happens to end on
+    // a .map-node fires the delegated click and travels the node, irreversibly
+    // advancing the run. Past the threshold we swallow the next click in the
+    // CAPTURE phase, which runs before the bubbling #app listener ever sees it —
+    // so the game's click handler needs no knowledge of dragging.
+    (function initMapDrag() {
+      const THRESHOLD = 5;   // px of movement before a press counts as a drag
+      let port = null, dragging = false, moved = false;
+      let sx = 0, sy = 0, sl = 0, st = 0;
+
+      document.getElementById('app').addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        port = e.target.closest('.map-screen');
+        if (!port) return;
+        dragging = true;
+        moved = false;
+        sx = e.clientX; sy = e.clientY;
+        sl = port.scrollLeft; st = port.scrollTop;
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (!moved && Math.hypot(dx, dy) < THRESHOLD) return;
+        if (!moved) {
+          moved = true;
+          port.classList.add('dragging');
+          Tooltip.hide();          // a node tooltip would trail the pointer
+        }
+        port.scrollLeft = sl - dx;
+        port.scrollTop = st - dy;
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (!dragging) return;
+        dragging = false;
+        if (port) port.classList.remove('dragging');
+        if (moved) {
+          window.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+          }, { capture: true, once: true });
+        }
+        port = null;
+      });
+    })();
 
     document.getElementById('app').addEventListener('click', (e) => {
       AudioEngine.unlock();               // first gesture unlocks audio
@@ -6027,6 +6314,10 @@
           STATE.ui.inspect = null;
           break;
 
+        case 'closeKeyHelp':
+          STATE.ui.keyHelp = false;
+          break;
+
         case 'viewPile':
           STATE.ui.pileViewer = btn.dataset.pile || 'deck';
           break;
@@ -6068,7 +6359,23 @@
           return;
         }
         if (cancelTargeting(STATE)) { render(); return; }
+        if (STATE.ui && STATE.ui.keyHelp) { STATE.ui.keyHelp = false; render(); return; }
       }
+
+      // --- Global shortcuts. These MUST stay above the two guards below, which
+      // early-return on an open overlay and on any screen that isn't combat.
+      // Both are UI-only, so neither calls saveGame(). ---
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) {
+        STATE.ui.keyHelp = !STATE.ui.keyHelp;
+        render();
+        return;
+      }
+      if (e.key.toLowerCase() === 'd' && STATE.run && !(STATE.ui && (STATE.ui.pileViewer || STATE.ui.picker))) {
+        STATE.ui.pileViewer = 'deck';
+        render();
+        return;
+      }
+
       if (STATE.ui && (STATE.ui.pileViewer || STATE.ui.picker)) return;
       if (STATE.screen !== SCREENS.COMBAT || !STATE.combat || STATE.combat.phase !== 'PLAYER') return;
       if (e.key.toLowerCase() === 'e') {
@@ -6077,8 +6384,10 @@
         saveGame(STATE);
         return;
       }
-      const n = parseInt(e.key, 10);
-      if (!Number.isNaN(n) && n >= 1 && n <= 9) {
+      // 1-9 then 0 for the tenth. HAND_SIZE is 10, so binding only 1-9 left the
+      // last card in a full hand unreachable by keyboard.
+      const n = e.key === '0' ? 10 : parseInt(e.key, 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= 10) {
         if (STATE.combat.pendingCardUid || STATE.combat.pendingPotionSlot !== null) {
           const enemies = STATE.combat.enemies.filter(x => x.alive);
           const enemy = enemies[n - 1];
