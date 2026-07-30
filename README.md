@@ -4,6 +4,12 @@ A Slay the Spire–style deckbuilding roguelike, built as a single self-containe
 
 **▶ Play:** https://trevorlolsen.github.io/cinder-vault/
 
+## Requirements
+
+A desktop browser with a window of at least **1000 × 660**, plus a mouse and keyboard. Below that size the game shows a resize prompt instead: a ten-card hand needs about 972px of width before cards start overlapping, and hiding a card you are holding hides a decision.
+
+There is no touch support — the game uses hover tooltips and keyboard shortcuts throughout.
+
 ## Running locally
 
 Serve the folder over HTTP (assets load via relative paths, so `file://` won't work reliably):

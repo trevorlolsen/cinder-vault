@@ -643,9 +643,10 @@
     }
 
     /* Enemy portrait. Combat used to show nothing but a name and a bar, while
-       cards, relics and map nodes all had art. Sits BESIDE the stat block:
-       the enemy row is height-constrained inside the fixed 1024x600 stage,
-       but panels are wide, so vertical space is the scarce one. */
+       cards, relics and map nodes all had art. Sits BESIDE the stat block, and
+       still should: the enemy row is horizontal, so panels are wide and short.
+       Stacking the portrait above the stats would push each panel to ~250px tall and blow
+       the height budget that sets the 660px minimum window. */
     .enemy-body {
       display: flex;
       align-items: center;
@@ -5264,8 +5265,13 @@
         .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    // Tap-to-inspect: every rules explanation used to live only in a title="",
-    // which never appears on touch (the Kindle/Capacitor build shows nothing).
+    // Click-to-pin inspect. Emits the same data-ititle/data-ibody the hover
+    // tooltip reads, plus the `inspect` action: hover for a glance, click to pin
+    // a panel you can read while the mouse moves elsewhere.
+    //
+    // Only for elements with no click behaviour of their own — it sets
+    // data-action, so anything that already has one (cards, enemy panels, potion
+    // slots) emits the two data attributes directly instead.
     function inspectAttrs(title, body) {
       return `data-action="inspect" data-ititle="${attrEscape(title)}" data-ibody="${attrEscape(body)}"`;
     }
