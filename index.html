@@ -164,13 +164,55 @@
     .menu-panel {
       text-align: center;
       border: 2px solid var(--border-color);
-      padding: 28px 40px;
+      padding: 2rem 2.5rem;
       background: var(--bg-panel);
-      max-width: 500px;
-      /* Auto top/bottom margins center the panel when it fits and keep the top
-         reachable (scrollable) when it's taller than the 600px stage. */
+      /* Definite width, not max-width: .menu-characters uses auto-fit with 1fr
+         tracks, and in a shrink-to-fit panel those resolve against max-content, so
+         it settled on two columns and the third character wrapped to its own row.
+         58rem fits all three side by side at every supported size. */
+      width: min(58rem, 100%);
+      max-width: min(58rem, 100%);
+      /* Load-bearing pair with .menu-screen's justify-content: flex-start. Auto
+         top/bottom margins centre the panel when it fits and keep the top
+         REACHABLE when it doesn't. justify-content: center would put the title
+         above the scroll origin in a short window. */
       margin: auto 0;
     }
+
+    /* Three character columns instead of one ~1130px stack. */
+    .menu-characters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+      gap: 1.25rem;
+      text-align: left;
+      margin: 1.25rem 0;
+    }
+
+    .menu-character {
+      border: 1px solid var(--border-color);
+      background: var(--bg-dark);
+      padding: 0.875rem;
+    }
+
+    .menu-character-name { font-weight: bold; margin-bottom: 0.25rem; }
+
+    .asc-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+      margin-top: 0.5rem;
+    }
+
+    .menu-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+      gap: 1rem;
+      align-items: start;
+      text-align: left;
+    }
+    .menu-stats .stats-box { margin: 0; }
+    .stats-box-label { color: var(--text-muted); margin-bottom: 6px; }
+    .menu-section-label { margin: 1.25rem 0 0.5rem; color: var(--text-muted); }
 
     .menu-title {
       font-size: var(--fs-3xl);
@@ -1050,19 +1092,37 @@
     .center-panel-screen {
       justify-content: center;
       align-items: center;
-      padding: 20px;
+      padding: 1.5rem;
+      min-height: 0;   /* lets the panel actually shrink instead of overflowing */
     }
 
+    /* Shared by all eight panel screens (boon, rest, shop, event, card reward,
+       treasure, card picker, pile viewer). The scroller lives on .panel-content,
+       one level down, so the title and the Leave/Skip/Close button stay pinned on
+       every one of them. max-height was a fixed 540px, which is why content grew
+       past it as the type scale went up. */
     .center-panel {
+      display: flex;
+      flex-direction: column;
       border: 2px solid var(--border-color);
       background: var(--bg-panel);
-      padding: 30px;
-      max-width: 600px;
-      max-height: 540px;
-      overflow-y: auto;
+      padding: 1.75rem 2rem;
+      max-width: min(42rem, 100%);
+      max-height: 100%;
+      overflow: hidden;
+    }
+
+    /* Grid screens need a DEFINITE width. .card-list uses
+       repeat(auto-fill, minmax(..,1fr)), and inside a shrink-to-fit flex item those
+       1fr tracks resolve against max-content, collapsing auto-fill toward one
+       column. This is the one place shrink-to-fit must not apply. */
+    .center-panel.wide {
+      width: min(64rem, 100%);
+      max-width: min(64rem, 100%);   /* must also lift the base 42rem cap */
     }
 
     .panel-title {
+      flex: 0 0 auto;
       font-size: var(--fs-xl);
       margin-bottom: 20px;
       color: var(--text-primary);
@@ -1070,7 +1130,10 @@
     }
 
     .panel-content {
-      margin-bottom: 20px;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      margin-bottom: 1.25rem;
     }
 
     .panel-text {
@@ -1113,9 +1176,43 @@
 
     .card-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-      gap: 10px;
-      margin: 15px 0;
+      /* auto-fill, not auto-fit: auto-fit collapses empty tracks, so a 2-card row
+         would stretch its cards to half the panel. Tracks are sized from the same
+         token the hand uses, so a deck card and a held card read alike. */
+      grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+      align-items: start;
+    }
+
+    /* .card carries width: 92px for the hand's flex row; in a grid the track owns
+       the width, so release it. */
+    .card-list .card {
+      width: auto;
+      max-width: none;
+      flex-shrink: 1;
+    }
+
+    /* Readable but not interactive (the pile viewer lists your deck — it is not
+       "disabled", it just isn't clickable, so it keeps full opacity). */
+    .card.static-face { cursor: default; }
+    .card.static-face:hover {
+      transform: none;
+      box-shadow: none;
+      border-color: var(--border-color);
+    }
+
+    .card.disabled-choice { opacity: 0.45; cursor: not-allowed; }
+    .card.disabled-choice:hover { transform: none; box-shadow: none; }
+
+    /* Muted sibling of .card-lethal-warning: why a card can't be picked. */
+    .card-note {
+      margin-top: auto;
+      text-align: center;
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      border-top: 1px solid var(--border-color);
+      padding-top: 3px;
     }
 
     .shop-item {
@@ -1138,8 +1235,9 @@
 
     .leave-button, .skip-button, .new-run-button {
       display: block;
+      flex: 0 0 auto;   /* pinned below the .panel-content scroller */
       width: 100%;
-      margin-top: 20px;
+      margin-top: 0;
       padding: 0.625rem 1rem;
       background: var(--bg-dark);
       border: 2px solid var(--border-color);
@@ -1156,17 +1254,32 @@
     }
 
     /* === Victory/GameOver Screens === */
+    /* renderGameOver reuses class="victory-screen", so this covers both. */
     .victory-screen {
       justify-content: center;
       align-items: center;
+      padding: 1.5rem;
+      min-height: 0;
+    }
+
+    /* Both panels had no max-height and no scroller, so growth clipped silently. */
+    .victory-panel, .gameover-panel {
+      display: flex;
+      flex-direction: column;
+      max-width: min(34rem, 100%);
+      max-height: 100%;
+      overflow: hidden;
+    }
+    .victory-panel .panel-content, .gameover-panel .panel-content {
+      min-height: 0;
+      overflow-y: auto;
     }
 
     .victory-panel {
       text-align: center;
       border: 2px solid var(--color-heal);
-      padding: 40px;
+      padding: 2rem 2.5rem;
       background: var(--bg-panel);
-      max-width: 500px;
     }
 
     .victory-title {
@@ -1178,9 +1291,8 @@
     .gameover-panel {
       text-align: center;
       border: 2px solid var(--color-danger);
-      padding: 40px;
+      padding: 2rem 2.5rem;
       background: var(--bg-panel);
-      max-width: 500px;
     }
 
     .gameover-title {
@@ -4681,10 +4793,12 @@
       const shownAscensions = Array.from({ length: Math.min(ascMax, 5) + 1 }, (_, i) => i);
       const ascensionText = ASCENSIONS.slice(0, Math.max(0, ascMax)).map(a => `A${a.level}: ${a.name}`).join(' · ');
       const characterButtons = Object.values(CHARACTERS_DB).map(ch => `
-        <div style="margin-bottom: 12px;">
-          <div style="font-weight:bold; margin-bottom:4px;">${ch.name}</div>
+        <div class="menu-character">
+          <div class="menu-character-name">${ch.name}</div>
           <div class="menu-blurb">${ch.blurb}</div>
-          ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" title="${describeAscension(a)}">Start A${a}</button>`).join('')}
+          <div class="asc-row">
+            ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" title="${attrEscape(describeAscension(a))}">Start A${a}</button>`).join('')}
+          </div>
         </div>
       `).join('');
       const recent = (meta.runs || []).slice(0, 3).map(r => `<div class="stat-line"><span>${r.won ? 'Win' : 'Loss'} · ${r.character}</span><span>F${r.floor} · A${r.ascension || 0}</span></div>`).join('') || '<div class="stat-line"><span>No runs yet</span><span>—</span></div>';
@@ -4694,18 +4808,20 @@
             <div class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</div>
             <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v6</div>
             ${saveButton}
-            <div style="margin: 20px 0 10px; color: var(--text-muted);">Start a new run</div>
-            ${characterButtons}
-            <div class="stats-box">
-              <div class="stat-line"><span>Wins / Losses:</span><span>${meta.wins || 0} / ${meta.losses || 0}</span></div>
-              <div class="stat-line"><span>Best Floor:</span><span>${meta.bestFloor || 0}</span></div>
-              <div class="stat-line"><span>Best Gold:</span><span>${meta.bestGold || 0}</span></div>
-              <div class="stat-line"><span>Ascension Unlocked:</span><span>${ascMax}</span></div>
-            </div>
-            ${ascMax > 0 ? `<div class="stats-box"><div style="color: var(--text-muted); margin-bottom: 6px;">Ascension Modifiers</div><div class="asc-text">${ascensionText}</div></div>` : ''}
-            <div class="stats-box">
-              <div style="color: var(--text-muted); margin-bottom: 6px;">Recent Runs</div>
-              ${recent}
+            <div class="menu-section-label">Start a new run</div>
+            <div class="menu-characters">${characterButtons}</div>
+            <div class="menu-stats">
+              <div class="stats-box">
+                <div class="stat-line"><span>Wins / Losses:</span><span>${meta.wins || 0} / ${meta.losses || 0}</span></div>
+                <div class="stat-line"><span>Best Floor:</span><span>${meta.bestFloor || 0}</span></div>
+                <div class="stat-line"><span>Best Gold:</span><span>${meta.bestGold || 0}</span></div>
+                <div class="stat-line"><span>Ascension Unlocked:</span><span>${ascMax}</span></div>
+              </div>
+              ${ascMax > 0 ? `<div class="stats-box"><div class="stats-box-label">Ascension Modifiers</div><div class="asc-text">${ascensionText}</div></div>` : ''}
+              <div class="stats-box">
+                <div class="stats-box-label">Recent Runs</div>
+                ${recent}
+              </div>
             </div>
             <div class="menu-tagline">
               Navigate a branching path. Build your deck. Defeat the vault boss.
@@ -4806,6 +4922,55 @@
               ${nodesHTML}
             </div>
           </div>
+        </div>
+      `;
+    }
+
+    // One card face, shared by the combat hand, the pile viewer, the card picker
+    // and the card reward screen. Before this, each of those built its own markup —
+    // the hand as a real card, the other three as full-width text rows, which is why
+    // a 30-card deck only showed about four of them.
+    //
+    // Accepts BOTH shapes: card instances ({defId, upgraded, uid}) from the hand,
+    // deck and piles, and raw card defs ({id, name, cost, type}) from the reward
+    // screen's generateCardReward().
+    //
+    // opts:
+    //   action, dataAttr, dataValue  the delegated click hook. Omit `action` and the
+    //                               face is inert — the disabled path must OMIT it
+    //                               rather than use a `disabled` attribute, since a
+    //                               <div> has none.
+    //   previewUpgraded  show upgraded VALUES while leaving the name unsuffixed
+    //                    (the upgrade picker previews what you would get).
+    //   staticFace       readable but not clickable (pile viewer).
+    //   disabled         dimmed and not clickable (ineligible picker cards).
+    //   note             muted bottom banner, e.g. why a card is ineligible.
+    //   warning          red bottom banner (the hand's LETHAL COST notice).
+    //   extraClass       'unaffordable', 'lethal-cost', ...
+    //   titleSuffix      appended to the native title.
+    function cardFaceHTML(cardOrDef, opts) {
+      opts = opts || {};
+      const defId = cardOrDef.defId || cardOrDef.id;
+      const def = CARDS_DB[defId];
+      if (!def) return '';
+      // The name reflects the card's ACTUAL state; only the description previews.
+      const isUpgraded = !!cardOrDef.upgraded;
+      const classes = ['card', def.type.toLowerCase()];
+      if (opts.extraClass) classes.push(opts.extraClass);
+      if (opts.staticFace) classes.push('static-face');
+      if (opts.disabled) classes.push('disabled-choice');
+      const hook = opts.action
+        ? `data-action="${opts.action}"${opts.dataAttr ? ` ${opts.dataAttr}="${opts.dataValue}"` : ''}`
+        : '';
+      return `
+        <div class="${classes.join(' ')}" ${hook} title="${attrEscape(def.name + (opts.titleSuffix || ''))}">
+          <div class="card-cost">${def.cost}</div>
+          <div class="card-name">${def.name}${isUpgraded ? '+' : ''}</div>
+          <div class="card-art">${cardArtIcon(defId, def.type)}</div>
+          <div class="card-type">${typeIcon(def.type)} ${def.type}</div>
+          <div class="card-desc">${describeCard(cardOrDef, opts.previewUpgraded)}</div>
+          ${opts.warning ? `<div class="card-lethal-warning">${opts.warning}</div>` : ''}
+          ${opts.note ? `<div class="card-note">${opts.note}</div>` : ''}
         </div>
       `;
     }
@@ -5037,22 +5202,18 @@
 
       const handHTML = hand.map(card => {
         const cardDef = CARDS_DB[card.defId];
-        const typeClass = cardDef.type.toLowerCase();
         const affordable = cardDef.cost === 'X' || cardDef.cost <= energy;
         // Blood-cost cards can kill you now, so say so before it happens.
         const hpCost = cardHpCost(cardDef, card.upgraded);
         const lethal = hpCost > 0 && hpCost >= STATE.run.hp;
-        const hint = lethal ? ` — WARNING: its ${hpCost} HP cost would kill you` : '';
-        return `
-          <div class="card ${typeClass} ${affordable ? '' : 'unaffordable'} ${lethal ? 'lethal-cost' : ''}" data-action="selectCard" data-carduid="${card.uid}" title="${cardDef.name}${hint}">
-            <div class="card-cost">${cardDef.cost}</div>
-            <div class="card-name">${cardDef.name}${card.upgraded ? '+' : ''}</div>
-            <div class="card-art">${cardArtIcon(card.defId, cardDef.type)}</div>
-            <div class="card-type">${typeIcon(cardDef.type)} ${cardDef.type}</div>
-            <div class="card-desc">${describeCard(card)}</div>
-            ${lethal ? '<div class="card-lethal-warning">LETHAL COST</div>' : ''}
-          </div>
-        `;
+        return cardFaceHTML(card, {
+          action: 'selectCard',
+          dataAttr: 'data-carduid',
+          dataValue: card.uid,
+          extraClass: [affordable ? '' : 'unaffordable', lethal ? 'lethal-cost' : ''].filter(Boolean).join(' '),
+          warning: lethal ? 'LETHAL COST' : '',
+          titleSuffix: lethal ? ` — WARNING: its ${hpCost} HP cost would kill you` : ''
+        });
       }).join('');
 
 
@@ -5182,7 +5343,7 @@
 
       return `
         <div class="screen center-panel-screen">
-          <div class="center-panel">
+          <div class="center-panel wide">
             <div class="panel-title">${icon('t-shop','icon-title')} Shop ${icon('t-shop','icon-title')}</div>
             <div class="panel-content">
               <div style="color: var(--color-gold); font-weight: bold; margin-bottom: 15px;">Gold: ${gold}${potionsFull ? '  <span style="color:var(--text-muted); font-weight:normal;">(potion slots full)</span>' : ''}</div>
@@ -5244,12 +5405,13 @@
       const potion = reward.potionId ? POTIONS_DB[reward.potionId] : null;
       const hasPotionRoom = STATE.run.potions.some(p => p === null);
 
-      const choicesHTML = choices.map((card, idx) => `
-        <button class="choice-button" data-action="selectCardRewardChoice" data-cardidx="${idx}">
-          <span class="choice-label">${cardArtIcon(card.id, card.type)} ${card.name}</span>
-          <span class="choice-desc">${typeIcon(card.type)} [${card.type}] Cost: ${card.cost} — ${describeCard(card)}</span>
-        </button>
-      `).join('');
+      // These are raw card DEFS from generateCardReward, not instances —
+      // cardFaceHTML normalises both.
+      const choicesHTML = `<div class="card-list">${choices.map((card, idx) => cardFaceHTML(card, {
+        action: 'selectCardRewardChoice',
+        dataAttr: 'data-cardidx',
+        dataValue: idx
+      })).join('')}</div>`;
 
       const replacePotionHTML = !hasPotionRoom && !reward.potionTaken ? STATE.run.potions.map((pid, slot) => {
         const pdef = pid ? POTIONS_DB[pid] : null;
@@ -5267,7 +5429,7 @@
 
       return `
         <div class="screen center-panel-screen">
-          <div class="center-panel">
+          <div class="center-panel wide">
             <div class="panel-title">${icon('t-reward','icon-title')} Combat Reward ${icon('t-reward','icon-title')}</div>
             <div class="panel-content">
               <div class="reward-summary">Gold gained: <strong style="color:var(--color-gold);">${icon('gold')} ${reward.gold || 0}</strong>${reward.isElite ? ' · Elite defeated' : ''}</div>
@@ -5427,21 +5589,28 @@
         : `${icon('t-upgrade','icon-title')} Upgrade a Card ${icon('t-upgrade','icon-title')}`;
       const desc = isRemove ? 'Choose a card to permanently remove from your deck:' : 'Choose a card to permanently upgrade:';
 
-      const cardsHTML = STATE.run.deck.map(card => {
+      const cardsHTML = `<div class="card-list">${STATE.run.deck.map(card => {
         const cardDef = CARDS_DB[card.defId];
         const disabled = !isRemove && (card.upgraded || cardDef.type === CARD_TYPES.CURSE);
-        const reason = cardDef.type === CARD_TYPES.CURSE && !isRemove ? ' — curses cannot be upgraded' : (card.upgraded && !isRemove ? ' — already upgraded' : '');
-        return `
-          <button class="choice-button ${disabled ? 'disabled-choice' : ''}" ${disabled ? '' : `data-action="pickCard" data-carduid="${card.uid}"`}>
-            <span class="choice-label">${cardArtIcon(card.defId, cardDef.type)} ${cardDef.name}${card.upgraded ? '+' : ''}</span>
-            <span class="choice-desc">${typeIcon(cardDef.type)} [${cardDef.type}] Cost ${cardDef.cost} — ${describeCard(card, !isRemove && !disabled ? true : undefined)}${reason}</span>
-          </button>
-        `;
-      }).join('');
+        const note = cardDef.type === CARD_TYPES.CURSE && !isRemove ? 'curses cannot be upgraded'
+          : (card.upgraded && !isRemove ? 'already upgraded' : '');
+        return cardFaceHTML(card, {
+          // Omitting `action` is what makes a disabled face inert — a <div> has no
+          // `disabled` attribute to fall back on.
+          action: disabled ? '' : 'pickCard',
+          dataAttr: 'data-carduid',
+          dataValue: card.uid,
+          // On the upgrade picker, show what you would GET (the name stays unsuffixed
+          // because the card is not upgraded yet).
+          previewUpgraded: (!isRemove && !disabled) ? true : undefined,
+          disabled,
+          note
+        });
+      }).join('')}</div>`;
 
       return `
         <div class="screen center-panel-screen">
-          <div class="center-panel">
+          <div class="center-panel wide">
             <div class="panel-title">${title}</div>
             <div class="panel-content">
               <div class="panel-text">${desc}</div>
@@ -5485,20 +5654,16 @@
         title = `${labels[pile] || pile} (${STATE.combat[pile].length})`;
         cards = STATE.combat[pile];
       }
-      const cardsHTML = cards.length ? cards.map(card => {
-        const cardDef = CARDS_DB[card.defId];
-        if (!cardDef) return '';
-        return `
-          <button class="choice-button disabled-choice">
-            <span class="choice-label">${cardArtIcon(card.defId, cardDef.type)} ${cardDef.name}${card.upgraded ? '+' : ''}</span>
-            <span class="choice-desc">${typeIcon(cardDef.type)} [${cardDef.type}] Cost ${cardDef.cost} — ${describeCard(card)}</span>
-          </button>
-        `;
-      }).join('') : '<div class="panel-text">No cards here.</div>';
+      // Real card faces in a grid: a 30-card deck used to show about four rows.
+      // These are readable but not clickable, hence staticFace rather than the
+      // dimmed disabled-choice this list used before.
+      const cardsHTML = cards.length
+        ? `<div class="card-list">${cards.map(card => cardFaceHTML(card, { staticFace: true })).join('')}</div>`
+        : '<div class="panel-text">No cards here.</div>';
       const statsHTML = pile === 'deck' ? renderDeckStats(cards) : '';
       return `
         <div class="screen center-panel-screen">
-          <div class="center-panel">
+          <div class="center-panel wide">
             <div class="panel-title">${title}</div>
             ${statsHTML}
             <div class="panel-content">${cardsHTML}</div>
