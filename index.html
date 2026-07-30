@@ -327,11 +327,20 @@
       display: flex;
       flex-direction: column;
       overflow: auto;
-      padding: 20px;
+      padding: 1.25rem;
     }
 
+    /* The canvas takes the width it is given and the geometry follows: node
+       `left` is a PERCENTAGE of canvasW and the edge SVG carries
+       viewBox="0 0 canvasW canvasH" with preserveAspectRatio="none", so both
+       stretch by the same factor with no measurement and no ResizeObserver.
+       Height stays inline (canvasH) because the map scrolls vertically.
+       max-width is px, not rem: rem would track the fluid type scale and drift
+       to ~1425px at large windows, spreading 6 lanes into whitespace. */
     .map-canvas {
       position: relative;
+      width: 100%;
+      max-width: 1200px;   /* 6 lanes at ~195px pitch; wider is just whitespace */
       margin: 0 auto;
       /* .map-screen is a column flex container, so height is the MAIN axis and
          the canvas's inline height (FLOORS * FLOOR_HEIGHT) was being flex-shrunk
@@ -352,7 +361,11 @@
     }
 
     /* Routes now genuinely fork, so the edges have to be readable — at
-       --border-color on the cream background they were nearly invisible. */
+       --border-color on the cream background they were nearly invisible.
+       The <line>s carry vector-effect="non-scaling-stroke": the canvas stretches
+       horizontally against a fixed viewBox, so without it a stroke-width of 2
+       renders thinner on near-vertical lines than on near-horizontal ones (and
+       the dash pattern below stretches with it). */
     .map-edge {
       stroke: var(--text-muted);
       stroke-width: 2;
@@ -1596,10 +1609,10 @@
       HAND_SIZE: 10,
       STARTING_MAX_HP: 80,
       STARTING_GOLD: 0,
+      // FLOORS and COLS are game rules: generateMap(), validateContent() and
+      // autoplayAll() read them. Map pixel geometry lives in MAP_LAYOUT instead.
       FLOORS: 16,
-      COLS: 6,
-      FLOOR_HEIGHT: 120,
-      COL_WIDTH: 140
+      COLS: 6
     };
 
     // Max HP the Fortify rest option grants. Rest sites are the only repeatable
@@ -4854,24 +4867,35 @@
       `;
     }
 
-    function nodeScreenPos(node) {
-      // x from col (centered within COLS lanes), y from floor (floor 1 at bottom).
-      const laneW = LAYOUT.COL_WIDTH;
-      const x = (node.col + 0.5) * laneW + MAP_PAD_X;
-      const y = (LAYOUT.FLOORS - node.floor) * LAYOUT.FLOOR_HEIGHT + LAYOUT.FLOOR_HEIGHT / 2 + MAP_PAD_Y;
-      return { x, y };
+    // Map geometry, deliberately separate from LAYOUT: these four are pure
+    // presentation, read only by nodeScreenPos/floorY/renderMap. FLOORS and COLS
+    // stay in LAYOUT because they are game rules — generateMap(), validateContent()
+    // and autoplayAll() all read them.
+    //
+    // These are the canvas's INTRINSIC units. The rendered canvas stretches to its
+    // container (see .map-canvas), and both the node percentages and the edge
+    // viewBox are derived from canvasW, so they stretch together.
+    const MAP_LAYOUT = { FLOOR_HEIGHT: 120, COL_WIDTH: 140, PAD_X: 30, PAD_Y: 20 };
+
+    // Floor 1 sits at the bottom. Shared by nodeScreenPos and the floor labels —
+    // those two used to repeat this expression verbatim and could drift apart.
+    function floorY(floor) {
+      return (LAYOUT.FLOORS - floor) * MAP_LAYOUT.FLOOR_HEIGHT + MAP_LAYOUT.FLOOR_HEIGHT / 2 + MAP_LAYOUT.PAD_Y;
     }
 
-    const MAP_PAD_X = 30;
-    const MAP_PAD_Y = 20;
+    function nodeScreenPos(node) {
+      // x from col (centered within COLS lanes), y from floor (floor 1 at bottom).
+      const x = (node.col + 0.5) * MAP_LAYOUT.COL_WIDTH + MAP_LAYOUT.PAD_X;
+      return { x, y: floorY(node.floor) };
+    }
 
     function renderMap() {
       const available = availableNodeIds(STATE);
       const currentId = STATE.run.currentNodeId;
       const nodes = STATE.run.map.nodes;
 
-      const canvasW = LAYOUT.COLS * LAYOUT.COL_WIDTH + MAP_PAD_X * 2;
-      const canvasH = LAYOUT.FLOORS * LAYOUT.FLOOR_HEIGHT + MAP_PAD_Y * 2;
+      const canvasW = LAYOUT.COLS * MAP_LAYOUT.COL_WIDTH + MAP_LAYOUT.PAD_X * 2;
+      const canvasH = LAYOUT.FLOORS * MAP_LAYOUT.FLOOR_HEIGHT + MAP_LAYOUT.PAD_Y * 2;
 
       // Map node icons are rendered via the global nodeIcon() helper (see icon infrastructure).
 
@@ -4885,7 +4909,7 @@
           const to = nodeScreenPos(target);
           // An edge is "reachable" if it leads out of the node you're standing on.
           const reachable = node.id === currentId && available.includes(connId);
-          edgesHTML += `<line class="map-edge ${reachable ? 'reachable' : ''}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+          edgesHTML += `<line class="map-edge ${reachable ? 'reachable' : ''}" vector-effect="non-scaling-stroke" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
         }
       }
 
@@ -4897,7 +4921,7 @@
         const typeClass = node.type === NODE_TYPES.ELITE ? 'elite-node' : node.type === NODE_TYPES.BOSS ? 'boss-node' : '';
         const label = node.type === NODE_TYPES.BOSS && STATE.run.bossName ? STATE.run.bossName : node.type;
         return `
-          <div class="map-node ${statusClass} ${typeClass}" style="left:${pos.x}px; top:${pos.y}px;"
+          <div class="map-node ${statusClass} ${typeClass}" style="left:${(pos.x / canvasW * 100).toFixed(3)}%; top:${pos.y}px;"
                data-nodeid="${node.id}" ${isAvailable ? `data-action="travelNode"` : ''}
                title="${label}">
             <div class="map-node-icon">${nodeIcon(node.type)}</div>
@@ -4909,14 +4933,16 @@
       // Floor labels down the left edge.
       let floorLabels = '';
       for (let f = 1; f <= LAYOUT.FLOORS; f++) {
-        const y = (LAYOUT.FLOORS - f) * LAYOUT.FLOOR_HEIGHT + LAYOUT.FLOOR_HEIGHT / 2 + MAP_PAD_Y;
-        floorLabels += `<div class="map-floor-label" style="top:${y}px;">F${f}</div>`;
+        floorLabels += `<div class="map-floor-label" style="top:${floorY(f)}px;">F${f}</div>`;
       }
 
+      // Only the height is inline. Width comes from .map-canvas so the canvas can
+      // use the window it is given; an inline width would override the stylesheet
+      // and pin the map back to its intrinsic 900px.
       return `
         <div class="screen">
           <div class="map-screen">
-            <div class="map-canvas" style="width:${canvasW}px; height:${canvasH}px;">
+            <div class="map-canvas" style="height:${canvasH}px;">
               <svg class="map-edges" viewBox="0 0 ${canvasW} ${canvasH}" preserveAspectRatio="none">${edgesHTML}</svg>
               ${floorLabels}
               ${nodesHTML}
