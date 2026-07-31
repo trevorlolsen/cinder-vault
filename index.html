@@ -2200,7 +2200,7 @@
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
-    // The 191-entry path-data map lives in assets/icons.js (generated, ~293KB).
+    // The 201-entry path-data map lives in assets/icons.js (generated, ~293KB).
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
@@ -2235,7 +2235,7 @@
     };
     const CARD_TYPE_ICONS = { ATTACK: 'type-attack', SKILL: 'type-skill', POWER: 'type-power', CURSE: 'type-curse' };
     const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge' };
-    const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir' };
+    const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem' };
     const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil' };
     const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike' };
     // Ids (relics + potions) that have a curated colored pixel-art raster in assets/art/icons/.
@@ -3231,6 +3231,115 @@
           return parseIntentToken(turn % 3 === 0 ? 'ATK13' : 'SAPPED2');
         }
       },
+      // --- Elites that fill the three roles no elite covered ---
+      // Every elite in the game was a solo body doing damage, block or debuffs.
+      // Nothing healed, nothing summoned, and nothing dealt the status-card tier
+      // Phase 10 defined. These three exist to be fought WITH an escort, which is
+      // why their HP is low for elites: the encounter, not the enemy, is the elite.
+      'ash-vicar': {
+        id: 'ash-vicar', name: 'Ash Vicar', maxHp: 48, isElite: true,
+        // HEAL already targets the most-wounded living ally, so the Vicar is only
+        // a problem while its escort is up — and the escort is only a problem
+        // while the Vicar is. It teaches "kill the support first", which is a
+        // lesson this game has never had an enemy capable of teaching.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          const hurt = combat.enemies.some(e => e.alive && e.hp < e.maxHp * 0.8);
+          if (hurt && turn % 2 === 1) return parseIntentToken('HEAL14');
+          return parseIntentToken(turn % 4 === 0 ? 'BLOCK10' : 'ATK9');
+        }
+      },
+      'cinder-ordinator': {
+        id: 'cinder-ordinator', name: 'Cinder Ordinator', maxHp: 60, isElite: true,
+        // The first enemy to deal the Phase 10 status cards. Both go into the DRAW
+        // pile rather than the hand, so the cost is smeared across the fight
+        // instead of dumped on one turn you can simply eat.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (turn % 4 === 1) return { type: 'ADD_CURSE', cardId: 'status-ash', value: 2, pile: 'draw' };
+          if (turn % 4 === 3) return { type: 'ADD_CURSE', cardId: 'status-cinder', value: 1, pile: 'draw' };
+          return parseIntentToken(turn % 4 === 0 ? 'ATK12' : 'BLIGHT4');
+        }
+      },
+      'hollow-conductor': {
+        id: 'hollow-conductor', name: 'Hollow Conductor', maxHp: 66, isElite: true,
+        // Stops at four bodies ON PURPOSE: four enemy panels are exactly what fits
+        // the 1000x660 minimum window, and a fifth turns .combat-enemies into a
+        // horizontal scroller mid-fight. grave-summoner caps at 4 for the same reason.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          const alive = combat.enemies.filter(e => e.alive).length;
+          if (turn % 3 === 1 && alive < 4) {
+            return { type: 'SUMMON', enemyId: turn % 6 === 1 ? 'wraith' : 'ash-swarm', value: 1 };
+          }
+          return parseIntentToken(turn % 3 === 2 ? 'EXPOSED2' : 'ATK14');
+        }
+      },
+
+      // --- Act 2 roster ---
+      // Act 2 used to be Act 1 again with a 20% HP multiplier. These give it a
+      // shape of its own: hand pressure, unreliable block, group healing,
+      // anti-scaling and cheap bodies that make the packs wide.
+      'emberling': {
+        id: 'emberling', name: 'Emberling', maxHp: 30,
+        // Puts Cinder straight into your HAND, where it bills 3 HP at end of turn
+        // until you draw past it. A cheap body that is expensive to ignore.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (turn % 3 === 1) return { type: 'ADD_CURSE', cardId: 'status-cinder', value: 1, pile: 'hand' };
+          return parseIntentToken('ATK9');
+        }
+      },
+      'slagbeast': {
+        id: 'slagbeast', name: 'Slagbeast', maxHp: 54,
+        // Brittle first, then the swing it makes matter: block is a plan you have
+        // to commit to a turn early against this one.
+        pattern: ['BRITTLE2', 'ATK13', 'ATK13', 'BRITTLE2', 'ATK17']
+      },
+      'hollow-acolyte': {
+        id: 'hollow-acolyte', name: 'Hollow Acolyte', maxHp: 34,
+        // The Vicar's cheap cousin, so healing shows up in ordinary Act 2 packs
+        // and not only in elite fights.
+        pattern: ['ATK8', 'HEAL9', 'ATK8', 'HEAL9']
+      },
+      'vault-sentinel': {
+        id: 'vault-sentinel', name: 'Vault Sentinel', maxHp: 62,
+        // The Stone Guardian's lesson at Act 2 prices, and it reads YOUR Might —
+        // a Cinder Knight who opened on buffs has bought it free defensive turns.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          if ((combat.player.statuses.might || 0) >= 3) return parseIntentToken('BLOCK14');
+          return parseIntentToken(turn % 3 === 2 ? 'SAPPED2' : 'ATK14');
+        }
+      },
+      'ash-swarm': {
+        id: 'ash-swarm', name: 'Ash Swarm', maxHp: 22,
+        // Deliberately the cheapest body in the game: it exists so a pack can be
+        // three or four wide without the total HP becoming a slog.
+        pattern: ['ATK7', 'ATK7', 'ATK11']
+      },
+      'furnace-warden': {
+        id: 'furnace-warden', name: 'Furnace Warden', maxHp: 78, isElite: true,
+        // Slag lands in HAND and is playable — one energy buys you out of it.
+        // That is the whole fight: pay the tax every few turns or hold a dead card.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (turn % 4 === 2) return { type: 'ADD_CURSE', cardId: 'status-slag', value: 2, pile: 'hand' };
+          const loop = ['ATK15', 'BLOCK12', 'ATK15', 'ATK21'];
+          return parseIntentToken(loop[turn % loop.length]);
+        }
+      },
+      'mirrorplate-golem': {
+        id: 'mirrorplate-golem', name: 'Mirrorplate Golem', maxHp: 84, isElite: true,
+        // Turns your own defence into its offence: the harder you turtled, the
+        // harder it swings. Existing intent types only — just a computed value.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          if (turn % 4 === 1) return parseIntentToken('BLOCK14');
+          return { type: 'ATTACK', value: 12 + Math.min(14, combat.player.block) };
+        }
+      },
+
       'bonelord': {
         id: 'bonelord', name: 'The Bonelord', maxHp: 180, isBoss: true,
         getIntent: (enemy) => {
@@ -3272,6 +3381,15 @@
         getIntent: (enemy) => {
           const turn = enemy.intentIndex++;
           const verse = enemy.hp <= enemy.maxHp * 0.33 ? 2 : enemy.hp <= enemy.maxHp * 0.66 ? 1 : 0;
+          // The final verse opens by welding a Rusted Gear into your hand. Retain
+          // means endPlayerTurn's `kept` array holds it for the rest of the fight,
+          // so the last third of this boss is played one card short. Once, on the
+          // turn the verse turns over — the flag rides on the enemy instance, which
+          // survives a save/load like every other field on it.
+          if (verse === 2 && !enemy._rusted) {
+            enemy._rusted = true;
+            return { type: 'ADD_CURSE', cardId: 'status-rust', value: 1, pile: 'hand' };
+          }
           const loops = [
             ['ATK14', 'BRITTLE2', 'ATK14', 'SAPPED2'],
             ['BRITTLE3', 'ATK-ALL16', 'ATK20', 'SAPPED3'],
@@ -3651,6 +3769,26 @@
           { label: 'Challenge the guardian', desc: 'Fight a custom combat. Win extra gold and a relic.', apply: (game) => { startEventCombat(game, ['warden'], { gold: 30, relicId: 'random', text: 'The reliquary opens after the guardian falls.' }); } },
           { label: 'Pry loose coins', desc: 'Gain 18 gold. Add Decay to your deck.', apply: (game) => { game.run.gold += 18; game.run.deck.push({ uid: uid(), defId: 'curse-decay', upgraded: false }); } },
           { label: 'Leave quietly', desc: 'Avoid the fight.', apply: () => {} }
+        ]
+      },
+      // Act-2-only. `acts` is honoured by eventFitsAct in applyEvent; without it
+      // an event belongs to every act, which is what all ten above are.
+      {
+        id: 'slag-forge', acts: [2], title: 'The Slag Forge',
+        text: 'A furnace still burns this far down. Something is being made here, and whoever was making it did not finish.',
+        choices: [
+          { label: 'Temper a card in the heat', desc: 'Lose 6 HP. Upgrade a random unupgraded card.', canApply: (game) => game.run.deck.some(c => !c.upgraded), apply: (game) => { loseHp(game, 6, 'Slag Forge'); upgradeRandomCard(game); } },
+          { label: 'Rake the coals for scrap', desc: 'Gain 60 gold.', apply: (game) => { game.run.gold += 60; } },
+          { label: 'Bank the fire and move on', desc: 'Nothing happens.', apply: () => {} }
+        ]
+      },
+      {
+        id: 'choir-echo', acts: [2], title: 'An Echo of the Choir',
+        text: 'Voices you cannot place recite something in unison. The words fit your mouth far too well.',
+        choices: [
+          { label: 'Sing along', desc: 'Gain 10 max HP and heal the same. Add Doubt to your deck.', apply: (game) => { gainMaxHp(game, 10, true); game.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false }); } },
+          { label: 'Cover your ears', desc: 'Heal 12 HP.', apply: (game) => { healRun(game, 12, 'Echo of the Choir'); } },
+          { label: 'Walk until it stops', desc: 'Nothing happens.', apply: () => {} }
         ]
       }
     ];
@@ -4566,6 +4704,12 @@
 
     // Encounter tables. Each entry is a list of enemy ids that fight together.
     // Bands scale with floor so late floors are meaningfully harder.
+    //
+    // MAXIMUM FOUR BODIES PER ENTRY. .enemy-panel is
+    // `flex: 0 1 clamp(13rem, 20vw, 20rem)` with a 1.25rem gap and 1.25rem row
+    // padding, so at the 1000px minimum window four panels come to 932px and a
+    // fifth turns .combat-enemies into a horizontal scroller mid-fight. The gate
+    // measures the widest authored encounter at 1000x660 and fails on overflow.
     const ENCOUNTER_TABLES = {
       early: [ // floors 1-5
         ['ooze-crawler'], ['wraith', 'wraith'], ['molten-egg'], ['ashhound'],
@@ -4577,15 +4721,103 @@
       ],
       late: [ // floors 11-15
         ['golem'], ['gravemaw'], ['revenant'], ['harpy', 'harpy'], ['grave-summoner'],
-        ['gravemaw', 'ashhound'], ['revenant', 'phantom'], ['golem', 'molten-egg'], ['grave-summoner', 'crypt-mender']
+        ['gravemaw', 'ashhound'], ['revenant', 'phantom'], ['golem', 'molten-egg'], ['grave-summoner', 'crypt-mender'],
+        // The late band topped out at two bodies while the only three-body fight
+        // in the game sat in mid, so the last third of Act 1 was narrower than
+        // its middle.
+        ['wraith', 'wraith', 'revenant'], ['phantom', 'phantom', 'crypt-mender'],
+        ['ashhound', 'ashhound', 'harpy']
       ]
     };
 
+    // Every one of the eleven entries here used to be a single enemy, and `early`
+    // was two of them — so every early elite on every run of every character was
+    // one of exactly two fights. startCombat has always mapped over
+    // encounterDef.enemies; nothing but the data was stopping groups.
     const ELITE_TABLES = {
-      early: [['chanter'], ['warden']],
-      mid: [['warden'], ['pyromancer'], ['chanter'], ['mirror-thief']],
-      late: [['pyromancer'], ['leviathan'], ['warden'], ['slag-titan'], ['mirror-thief']]
+      early: [
+        ['chanter'], ['warden'],
+        // Both early groups are Vicar escorts: the smallest possible version of
+        // "kill the support first", at a total HP the floor-3 deck can still clear.
+        ['ash-vicar', 'wraith'], ['ash-vicar', 'ashhound']
+      ],
+      mid: [
+        ['warden'], ['pyromancer'], ['chanter'], ['mirror-thief'], ['cinder-ordinator'],
+        ['ash-vicar', 'warden'], ['chanter', 'ashhound']
+      ],
+      late: [
+        ['pyromancer'], ['leviathan'], ['warden'], ['slag-titan'], ['mirror-thief'],
+        ['hollow-conductor'], ['ash-vicar', 'pyromancer'], ['cinder-ordinator', 'chanter']
+      ]
     };
+
+    // Act 2 is not Act 1 again. It used to be literally that: continueEndlessRun
+    // regenerated the same sixteen floors from these same tables at +20% HP, so
+    // the "deeper vault" was the shallow one with bigger numbers.
+    const ACT2_ENCOUNTER_TABLES = {
+      early: [
+        ['emberling', 'emberling'], ['slagbeast'], ['ash-swarm', 'ash-swarm', 'ash-swarm'],
+        ['hollow-acolyte', 'ashhound'], ['vault-sentinel'], ['emberling', 'ash-swarm']
+      ],
+      mid: [
+        ['slagbeast', 'emberling'], ['vault-sentinel', 'hollow-acolyte'], ['gravemaw'],
+        ['ash-swarm', 'ash-swarm', 'emberling'], ['revenant', 'ash-swarm'],
+        ['slagbeast', 'ash-swarm'], ['hollow-acolyte', 'slagbeast'], ['golem', 'emberling']
+      ],
+      late: [
+        ['slagbeast', 'slagbeast'], ['vault-sentinel', 'emberling', 'ash-swarm'],
+        ['revenant', 'hollow-acolyte'], ['gravemaw', 'slagbeast'], ['golem', 'vault-sentinel'],
+        ['grave-summoner', 'hollow-acolyte'], ['revenant', 'revenant'],
+        // The widest authored encounter in the game, and the one the gate measures
+        // at 1000x660. Four cheap-to-mid bodies, not four bricks.
+        ['ash-swarm', 'ash-swarm', 'slagbeast', 'emberling']
+      ]
+    };
+
+    const ACT2_ELITE_TABLES = {
+      early: [
+        ['furnace-warden'], ['hollow-conductor'],
+        ['cinder-ordinator', 'ash-swarm'], ['ash-vicar', 'slagbeast']
+      ],
+      mid: [
+        ['furnace-warden'], ['mirrorplate-golem'], ['slag-titan'], ['leviathan'],
+        ['ash-vicar', 'furnace-warden'], ['cinder-ordinator', 'vault-sentinel'],
+        ['hollow-conductor', 'emberling']
+      ],
+      late: [
+        ['mirrorplate-golem'], ['leviathan'], ['hollow-conductor'],
+        ['furnace-warden', 'ash-vicar'], ['slag-titan', 'emberling'],
+        ['mirrorplate-golem', 'vault-sentinel'], ['cinder-ordinator', 'slagbeast'],
+        ['furnace-warden', 'hollow-acolyte', 'ash-swarm']
+      ]
+    };
+
+    // Acts own their tables AND their boss pool. The pools are disjoint, which is
+    // what makes an Act 2 rematch with the boss you just killed structurally
+    // impossible rather than something a filter has to remember to catch —
+    // continueEndlessRun re-rolled from all four bosses, so roughly one descent in
+    // four opened against the corpse you were standing on.
+    const ACT_TABLES = {
+      1: { encounters: ENCOUNTER_TABLES, elites: ELITE_TABLES, bosses: ['bonelord', 'archlich'] },
+      2: { encounters: ACT2_ENCOUNTER_TABLES, elites: ACT2_ELITE_TABLES, bosses: ['ashen-warden', 'hollow-choir'] }
+    };
+
+    // Act 3+ has no authored content of its own, so it reuses Act 2's.
+    function actTables(act) {
+      return ACT_TABLES[act] || ACT_TABLES[2];
+    }
+
+    // Act 3+ is the only case that needs the filter, because it is the only case
+    // where the pool it draws from is the same one the current boss came from.
+    function rollBossFor(game, act) {
+      const known = !!ACT_TABLES[act];
+      let pool = actTables(act).bosses.filter(id => ENEMIES_DB[id]);
+      if (!known && game && game.run && game.run.bossId) {
+        const filtered = pool.filter(id => id !== game.run.bossId);
+        if (filtered.length) pool = filtered;
+      }
+      return pickOne(pool);
+    }
 
     function encounterBand(floor) {
       if (floor <= 5) return 'early';
@@ -4594,15 +4826,13 @@
     }
 
     function selectEncounter(game, type) {
+      const tables = actTables(game.act || 1);
       if (type === 'boss') {
-        return { enemies: [game.run.bossId || 'bonelord'] };
-      }
-      if (type === true) {
-        const band = encounterBand(game.run.floor);
-        return { enemies: pickOne(ELITE_TABLES[band]).slice() };
+        return { enemies: [game.run.bossId || tables.bosses[0]] };
       }
       const band = encounterBand(game.run.floor);
-      return { enemies: pickOne(ENCOUNTER_TABLES[band]).slice() };
+      const table = type === true ? tables.elites : tables.encounters;
+      return { enemies: pickOne(table[band]).slice() };
     }
 
     // ============ 6. RELIC HELPERS ============
@@ -5245,8 +5475,7 @@
       // Each endless act resets the removal price ladder along with the economy.
       game.run.removalsThisRun = 0;
       healRun(game, Math.floor(game.run.maxHp * 0.25), 'Endless respite');
-      const bossPool = Object.values(ENEMIES_DB).filter(e => e.isBoss);
-      game.run.bossId = pickOne(bossPool).id;
+      game.run.bossId = rollBossFor(game, game.act);
       game.run.bossName = ENEMIES_DB[game.run.bossId].name;
       game.run.map = generateMap();
       goTo(SCREENS.MAP);
@@ -5587,12 +5816,21 @@
       return potions;
     }
 
+    // An event with no `acts` field belongs to every act; one that names acts is
+    // scoped to them. Act 2 needed writing that could not appear in Act 1 without
+    // spoiling what is down there.
+    function eventFitsAct(event, act) {
+      return !event.acts || event.acts.includes(act);
+    }
+
     function applyEvent(game) {
       if (game.ui.eventDef) return;
-      let unseen = EVENTS_DB.filter(e => !game.run.seenEventIds.includes(e.id));
+      const act = game.act || 1;
+      const inAct = EVENTS_DB.filter(e => eventFitsAct(e, act));
+      let unseen = inAct.filter(e => !game.run.seenEventIds.includes(e.id));
       if (unseen.length === 0) {
         game.run.seenEventIds = [];
-        unseen = EVENTS_DB.slice();
+        unseen = inAct.slice();
       }
       const event = unseen[Math.floor(rand() * unseen.length)];
       game.run.seenEventIds.push(event.id);
@@ -5700,9 +5938,10 @@
         act: 1
       };
       if (STATE.ascension >= 5) STATE.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false });
-      // Choose the boss up front so the player can plan around it.
-      const bossPool = Object.values(ENEMIES_DB).filter(e => e.isBoss);
-      STATE.run.bossId = pickOne(bossPool).id;
+      // Choose the boss up front so the player can plan around it. Act 1's pool
+      // is Bonelord + Arch-Lich; the Ashen Warden and the Hollow Choir are Act 2's
+      // and cannot be drawn here at all.
+      STATE.run.bossId = rollBossFor(STATE, 1);
       STATE.run.bossName = ENEMIES_DB[STATE.run.bossId].name;
       STATE.run.map = generateMap();
       clearSave();
@@ -8073,8 +8312,32 @@
         if (!(f > 1 && f < LAYOUT.FLOORS - 1)) warnings.push(`GUARANTEED_FLOORS floor ${floor} collides with a reserved floor`);
         if (!Object.values(NODE_TYPES).includes(type)) warnings.push(`GUARANTEED_FLOORS floor ${floor} has unknown node type: ${type}`);
       }
-      const encounterTables = [...Object.values(ENCOUNTER_TABLES).flat(), ...Object.values(ELITE_TABLES).flat()];
-      for (const encounter of encounterTables) for (const enemyId of encounter) if (!ENEMIES_DB[enemyId]) warnings.push(`Encounter references missing enemy: ${enemyId}`);
+      // Walks ACT_TABLES, not the Act 1 tables directly: scoping encounters by act
+      // without scoping the linter by act would have left every Act 2 table
+      // completely unchecked, which is the worst of both worlds.
+      for (const [act, tables] of Object.entries(ACT_TABLES)) {
+        for (const kind of ['encounters', 'elites']) {
+          for (const [band, entries] of Object.entries(tables[kind])) {
+            const where = `Act ${act} ${kind}.${band}`;
+            if (entries.length < 3) warnings.push(`${where} has only ${entries.length} entries`);
+            for (const encounter of entries) {
+              if (!encounter.length) { warnings.push(`${where} has an empty encounter`); continue; }
+              // Four panels is what the 1000px minimum window fits (see the note
+              // on ENCOUNTER_TABLES); a fifth silently becomes a scroller.
+              if (encounter.length > 4) warnings.push(`${where} encounter is ${encounter.length} bodies wide (max 4): ${encounter.join('+')}`);
+              for (const enemyId of encounter) if (!ENEMIES_DB[enemyId]) warnings.push(`${where} references missing enemy: ${enemyId}`);
+              if (kind === 'elites' && !encounter.some(id => ENEMIES_DB[id] && ENEMIES_DB[id].isElite)) {
+                warnings.push(`${where} elite encounter contains no elite: ${encounter.join('+')}`);
+              }
+            }
+          }
+        }
+        if (!tables.bosses || tables.bosses.length < 2) warnings.push(`Act ${act} has fewer than 2 bosses`);
+        for (const bossId of tables.bosses || []) {
+          if (!ENEMIES_DB[bossId]) warnings.push(`Act ${act} references missing boss: ${bossId}`);
+          else if (!ENEMIES_DB[bossId].isBoss) warnings.push(`Act ${act} boss ${bossId} is not flagged isBoss`);
+        }
+      }
       for (const [id, ch] of Object.entries(CHARACTERS_DB)) {
         if (id !== ch.id) warnings.push(`Character key/id mismatch: ${id}`);
         for (const cardId of ch.deck) {
@@ -8128,8 +8391,16 @@
       goTo(SCREENS.MAP);
       let steps = 0;
       const maxSteps = opts.maxSteps || 5000;
-      while (![SCREENS.VICTORY, SCREENS.GAMEOVER].includes(STATE.screen) && steps++ < maxSteps && STATE.run.floor <= (floors || LAYOUT.FLOORS)) {
-        if (STATE.screen === SCREENS.MAP) {
+      // opts.acts: how many acts to play through, default 1. Without it nothing
+      // automated could ever see Act 2 — the loop stopped dead at VICTORY on
+      // floor 16, so balance.mjs and the gate were both measuring Act 1 only and
+      // every act-scoped table below was invisible to them.
+      const wantActs = opts.acts || 1;
+      while (STATE.screen !== SCREENS.GAMEOVER && steps++ < maxSteps && STATE.run.floor <= (floors || LAYOUT.FLOORS)) {
+        if (STATE.screen === SCREENS.VICTORY) {
+          if ((STATE.act || 1) >= wantActs) break;
+          continueEndlessRun(STATE);
+        } else if (STATE.screen === SCREENS.MAP) {
           const next = availableNodeIds(STATE)[0];
           if (!next) break;
           travelToNode(STATE, next);
@@ -8173,7 +8444,7 @@
           break;
         }
       }
-      return { screen: STATE.screen, floor: STATE.run.floor, hp: STATE.run.hp, gold: STATE.run.gold, steps };
+      return { screen: STATE.screen, act: STATE.act || 1, floor: STATE.run.floor, hp: STATE.run.hp, gold: STATE.run.gold, steps };
     }
 
     // Runs autoplay across every character (and optional ascension levels) for a
