@@ -595,6 +595,69 @@
       white-space: nowrap;
     }
 
+    /* Error boundary. Sits above the key help (70) and the inspect panel (60)
+       because it reports on state those may be describing wrongly. */
+    .error-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    .error-panel {
+      max-width: min(34rem, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      padding: 1.75rem 2rem;
+      border: 2px solid var(--color-danger);
+      background: var(--bg-panel);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .error-title {
+      font-size: var(--fs-lg);
+      color: var(--color-danger);
+      margin-bottom: 0.75rem;
+    }
+
+    .error-body { font-size: var(--fs-base); margin-bottom: 0.75rem; }
+
+    .error-detail {
+      font-size: var(--fs-sm);
+      color: var(--text-muted);
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 1rem;
+      border-left: 3px solid var(--border-color);
+      background: var(--bg-dark);
+      word-break: break-word;
+    }
+
+    .error-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    /* Painted only when renderScreen() itself throws, so it uses no tokens that
+       a broken render could have been mid-way through changing. */
+    .fatal-panel {
+      max-width: 34rem;
+      margin: 4rem auto;
+      padding: 2rem;
+      border: 2px solid #dc322f;
+      background: #eee8d5;
+      color: #586e75;
+      font-family: inherit;
+    }
+    .fatal-panel h2 { color: #dc322f; margin: 0 0 1rem; }
+    .fatal-detail {
+      font-size: 0.875rem;
+      padding: 0.5rem;
+      background: #fdf6e3;
+      word-break: break-word;
+    }
+    .fatal-panel .menu-button { margin-top: 0.5rem; }
+
     .inspect-title {
       font-weight: bold;
       margin-bottom: 4px;
@@ -3115,6 +3178,11 @@
     // --- Persistence / meta-stats ---
     const SAVE_KEY = 'cinderVaultSave';
     const META_KEY = 'cinderVaultMeta';
+    // Bump this and add a migrateSave() branch whenever the STATE shape changes.
+    // It used to be a bare literal in three places (writer, reader, and prose in
+    // OVERVIEW.md); bumping the writer without the reader ships a Continue button
+    // that silently does nothing, because hasSave() only checks the key exists.
+    const SAVE_VERSION = 5;
 
     function clearSave() {
       try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
@@ -3141,12 +3209,35 @@
     // real save file and meta stats from being touched by simulated runs.
     let _headless = false;
 
+    // Keys that must never reach the save file.
+    //   template        a live ENEMIES_DB reference stashed on every combat enemy
+    //                   (see startCombat). JSON drops the functions but faithfully
+    //                   serialises name/maxHp/pattern into every save, and
+    //                   rehydrateState() reattaches the real object on load — so
+    //                   the serialised copy is pure weight in a synchronous write.
+    //   lastRunOptions  written by startNewRun() and read by absolutely nothing.
+    function saveReplacer(key, value) {
+      if (key === 'template' || key === 'lastRunOptions') return undefined;
+      return value;
+    }
+
+    function serializeGame(game) {
+      return JSON.stringify(
+        { version: SAVE_VERSION, rngState: _rngState, savedAt: Date.now(), state: game },
+        saveReplacer);
+    }
+
+    // Returns the serialised payload when it actually wrote, else null. The
+    // error boundary reuses the return value as its rollback snapshot, so a
+    // protected action costs one stringify, not two.
     function saveGame(game) {
-      if (_headless) return;
-      if (!game || !game.run || game.screen === SCREENS.MENU || game.screen === SCREENS.VICTORY || game.screen === SCREENS.GAMEOVER) return;
+      if (_headless) return null;
+      if (!game || !game.run || game.screen === SCREENS.MENU || game.screen === SCREENS.VICTORY || game.screen === SCREENS.GAMEOVER) return null;
       try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 5, rngState: _rngState, savedAt: Date.now(), state: game }));
-      } catch (e) {}
+        const payload = serializeGame(game);
+        localStorage.setItem(SAVE_KEY, payload);
+        return payload;
+      } catch (e) { return null; }
     }
 
     // Fills defaults for fields added after older save versions. Content ids are
@@ -3181,9 +3272,11 @@
     function rehydrateState(game) {
       if (!game) return game;
       game.ui = game.ui || {};
-      // saveGame() serialises all of STATE, so this would otherwise come back
-      // with the help overlay up. It is a keypress away; it is not run state.
+      // saveGame() serialises all of STATE, so these would otherwise come back
+      // up. Both are a keypress or a click away; neither is run state. The error
+      // banner in particular must not outlive the session that produced it.
       game.ui.keyHelp = false;
+      game.ui.error = null;
       game.act = game.act || 1;
       if (game.combat && game.combat.enemies) {
         for (const enemy of game.combat.enemies) enemy.template = ENEMIES_DB[enemy.defId];
@@ -3198,14 +3291,113 @@
     }
 
     function loadGame() {
+      let candidate, candidateRng;
       try {
         const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
-        if (!saved || !saved.state || saved.version < 2 || saved.version > 5) return false;
-        STATE = rehydrateState(migrateSave(saved.state));
-        _rngState = saved.rngState || STATE.seed || 1;
-        render();
-        return true;
-      } catch (e) { return false; }
+        if (!saved || !saved.state || saved.version < 2 || saved.version > SAVE_VERSION) return false;
+        candidate = rehydrateState(migrateSave(saved.state));
+        candidateRng = saved.rngState || candidate.seed || 1;
+      } catch (e) { logError('loadGame/parse', e); return false; }
+
+      // Commit to STATE only once we know the save can actually be drawn.
+      // This used to replace STATE first and render inside the same try, so a
+      // save that parsed but could not render (one naming content a later edit
+      // removed) left STATE swapped in, returned false, and the caller's
+      // fallback render() then threw against it — every later click throwing,
+      // no message, no way back. Bricked silently.
+      const prevState = STATE, prevRng = _rngState;
+      STATE = candidate;
+      _rngState = candidateRng;
+      try {
+        renderScreen();
+      } catch (e) {
+        STATE = prevState;
+        _rngState = prevRng;
+        logError('loadGame/render', e);
+        return false;
+      }
+      _lastGood = serializeGame(STATE);
+      return true;
+    }
+
+    // ===== ERROR BOUNDARY =====
+    // The game is one global STATE mutated in place by a 34-case delegated click
+    // handler, and roughly fifty hand-written custom()/apply() closures across
+    // CARDS_DB, POTIONS_DB, EVENTS_DB and RELICS_DB. A throw part-way through one
+    // of those used to leave the run genuinely corrupt AND the screen lying about
+    // it: playCard() applies effects, logs, and only then removes the card,
+    // deducts energy and restores the Pen Nib upgrade override — so a mid-effect
+    // throw dealt the damage, kept the card in hand, charged no energy, left the
+    // card permanently upgraded, and skipped the tail render(), so the pre-click
+    // screen stayed up and clicking again re-applied the whole thing.
+    //
+    // _lastGood is the serialised state as of the end of the last action that
+    // completed. Rolling back to it is exactly "undo the action that threw", and
+    // it reuses the save system's own round-trip rather than inventing an undo.
+    let _lastGood = null;
+    const _errorLog = [];
+
+    // Save, and remember what we wrote as the rollback point for the next action.
+    function checkpoint(game) {
+      const payload = saveGame(game);
+      if (payload) _lastGood = payload;
+    }
+
+    function logError(where, err) {
+      const entry = {
+        where,
+        message: String((err && err.message) || err),
+        stack: String((err && err.stack) || ''),
+        at: Date.now()
+      };
+      _errorLog.push(entry);
+      if (_errorLog.length > 20) _errorLog.shift();
+      // Deliberate: tools/cdp-verify.mjs collects Runtime.consoleAPICalled of type
+      // 'error' into the same bucket as uncaught exceptions. Catching an exception
+      // would otherwise HIDE it from the gate — the boundary would make a broken
+      // game report green. This line is what keeps the gate honest.
+      try { console.error('[cinder] ' + where + ':', err); } catch (e) {}
+      return entry;
+    }
+
+    function recoverFromError(where, err) {
+      logError(where, err);
+      let restored = false;
+      if (_lastGood) {
+        try {
+          const saved = JSON.parse(_lastGood);
+          if (saved && saved.state) {
+            STATE = rehydrateState(migrateSave(saved.state));
+            _rngState = saved.rngState || STATE.seed || 1;
+            restored = true;
+          }
+        } catch (e) { logError('rollback', e); }
+      }
+      if (!STATE) return;
+      STATE.ui = STATE.ui || {};
+      // Clear transient UI so the banner is not buried under a half-open overlay.
+      STATE.ui.picker = null;
+      STATE.ui.pileViewer = null;
+      STATE.ui.inspect = null;
+      STATE.ui.error = { message: String((err && err.message) || err), restored };
+      try { renderScreen(); } catch (e) { paintFatal(e); }
+    }
+
+    // Last resort: renderScreen() itself is broken, so no game screen can be
+    // drawn. Write plain markup straight into #app — no helpers, nothing that
+    // could throw again — so the player gets an exit instead of a blank page.
+    function paintFatal(err) {
+      logError('render/fatal', err);
+      try {
+        document.getElementById('app').innerHTML =
+          '<div class="fatal-panel">'
+          + '<h2>The vault collapsed.</h2>'
+          + '<p>Something broke badly enough that the game cannot draw itself.</p>'
+          + '<p class="fatal-detail">' + attrEscape(String((err && err.message) || err)) + '</p>'
+          + '<button class="menu-button" onclick="location.reload()">Reload</button>'
+          + '<button class="menu-button" onclick="try{localStorage.removeItem(\'cinderVaultSave\')}catch(e){};location.reload()">Clear save and reload</button>'
+          + '</div>';
+      } catch (e) {}
     }
 
     function recordRunResult(game, won) {
@@ -4691,7 +4883,22 @@
       return SCREENS_WITH_STATUS.has(STATE.screen) ? renderStatusBar() : '';
     }
 
+    // The protected entry point. Everything in the game calls this; only the
+    // error boundary and loadGame() call renderScreen() directly, because they
+    // need to SEE a render failure rather than have it self-heal underneath them.
     function render() {
+      try {
+        renderScreen();
+      } catch (err) {
+        // A throw here means the string was never assigned to app.innerHTML
+        // (renderScreen builds it fully, then assigns once), so the previous
+        // screen is still up — stale, and indistinguishable from a frozen game.
+        // Roll back and say so.
+        recoverFromError('render', err);
+      }
+    }
+
+    function renderScreen() {
       const app = document.getElementById('app');
 
       // Overlays (card picker / pile viewer) use the same single-render strategy.
@@ -4699,11 +4906,11 @@
       // of any screen, overlays included.
       let html = '';
       if (STATE.ui && STATE.ui.pileViewer) {
-        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + renderKeyHelp();
+        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
         return;
       }
       if (STATE.ui && STATE.ui.picker) {
-        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + renderKeyHelp();
+        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
         return;
       }
 
@@ -4743,9 +4950,32 @@
           break;
       }
 
-      app.innerHTML = statusBarHTML() + html + renderInspectPanel() + renderKeyHelp();
+      app.innerHTML = statusBarHTML() + html + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
       if (STATE.screen === SCREENS.MAP) requestAnimationFrame(scrollMapToFocus);
       AudioEngine.updateMusic(STATE);
+    }
+
+    // Sits inside #app (rule 1: clickable things carry data-action and live in
+    // #app). Deliberately plain — it is the one screen that must render when
+    // something else could not.
+    function renderErrorOverlay() {
+      const err = STATE.ui && STATE.ui.error;
+      if (!err) return '';
+      return `
+        <div class="error-overlay">
+          <div class="error-panel">
+            <div class="error-title">Something went wrong</div>
+            <div class="error-body">${err.restored
+              ? 'The action was undone and your run was put back the way it was before it.'
+              : 'Your run may be in an odd state. Reloading is the safest way on.'}</div>
+            <div class="error-detail">${attrEscape(err.message || 'Unknown error')}</div>
+            <div class="error-actions">
+              <button class="choice-button" data-action="dismissError">Continue anyway</button>
+              <button class="choice-button" data-action="reloadGame">Reload</button>
+              <button class="choice-button" data-action="clearSaveAndReload">Clear save and reload</button>
+            </div>
+          </div>
+        </div>`;
     }
 
     function scrollMapToFocus() {
@@ -5431,6 +5661,11 @@
             <div class="panel-content">
               <div class="panel-text">${event.text}</div>
               ${choicesHTML}
+              ${STATE.ui.error ? `
+              <button class="choice-button" data-action="leaveEvent">
+                <span class="choice-label">Walk away</span>
+                <span class="choice-desc">Leave without taking a choice.</span>
+              </button>` : ''}
             </div>
           </div>
         </div>
@@ -5908,18 +6143,10 @@
       });
     })();
 
-    document.getElementById('app').addEventListener('click', (e) => {
-      AudioEngine.unlock();               // first gesture unlocks audio
-      const btn = e.target.closest('[data-action]');
-      if (!btn) return;
-
-      AudioEngine.sfx('click');           // light UI tick on any actionable click
-      const action = btn.dataset.action;
-
-      // Any action other than opening another inspect dismisses the panel, so it
-      // never lingers over a screen it no longer describes.
-      if (action !== 'inspect' && STATE.ui) STATE.ui.inspect = null;
-
+    // The action table, extracted from the listener so the error boundary can
+    // wrap it without burying a 270-line switch inside a try block. No case
+    // returns early — verified — so the caller's tail render/save always runs.
+    function dispatchAction(action, btn) {
       switch (action) {
         case 'startGame':
           startNewRun({ characterId: btn.dataset.characterid || 'cinder-knight', ascension: parseInt(btn.dataset.ascension || '0') || 0 });
@@ -5986,7 +6213,10 @@
           goTo(SCREENS.MAP);
           break;
 
-        case 'chooseEvent':
+        // Braced. A `const` in an unbraced case scopes to the whole switch, so
+        // the first later case to reuse one of these names would be a
+        // redeclaration SyntaxError that takes the entire file down at load.
+        case 'chooseEvent': {
           const eventChoiceIdx = parseInt(btn.dataset.choiceidx);
           const activeEvent = STATE.ui.eventDef;
           const eventChoice = activeEvent.choices[eventChoiceIdx];
@@ -6004,10 +6234,33 @@
             }
           }
           break;
+        }
 
-        case 'selectCardRewardChoice':
+        // The one exit from a broken event. An apply() that throws used to strand
+        // the player here forever: the boundary rolls the throw back, but the only
+        // controls on screen were the same choices that had just failed.
+        case 'leaveEvent':
+          STATE.ui.eventDef = null;
+          goTo(SCREENS.MAP);
+          break;
+
+        case 'selectCardRewardChoice': {
           const cardIdx = parseInt(btn.dataset.cardidx);
           selectCardReward(STATE, STATE.ui.cardRewardChoices[cardIdx]);
+          break;
+        }
+
+        case 'dismissError':
+          if (STATE.ui) STATE.ui.error = null;
+          break;
+
+        case 'reloadGame':
+          location.reload();
+          break;
+
+        case 'clearSaveAndReload':
+          clearSave();
+          location.reload();
           break;
 
         case 'skipCardReward':
@@ -6191,14 +6444,46 @@
           STATE.ui.picker = null;
           break;
       }
+    }
 
-      // Safety-net re-render: combat actions (playCard/endTurn/targetEnemy)
-      // mutate state without navigating, so always redraw the current screen.
-      render();
-      saveGame(STATE);
+    document.getElementById('app').addEventListener('click', (e) => {
+      AudioEngine.unlock();               // first gesture unlocks audio
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      // A disabled control still matches closest('[data-action]') in browsers
+      // that dispatch the click; ignore it rather than running the action.
+      if (btn.disabled) return;
+
+      AudioEngine.sfx('click');           // light UI tick on any actionable click
+      const action = btn.dataset.action;
+
+      // Any action other than opening another inspect dismisses the panel, so it
+      // never lingers over a screen it no longer describes.
+      if (action !== 'inspect' && STATE.ui) STATE.ui.inspect = null;
+
+      try {
+        dispatchAction(action, btn);
+        // Safety-net re-render: combat actions (playCard/endTurn/targetEnemy)
+        // mutate state without navigating, so always redraw the current screen.
+        render();
+        checkpoint(STATE);
+      } catch (err) {
+        recoverFromError('click:' + action, err);
+      }
     });
 
     document.addEventListener('keydown', (e) => {
+      try {
+        handleKeydown(e);
+      } catch (err) {
+        recoverFromError('keydown:' + e.key, err);
+      }
+    });
+
+    // Body kept as its own function rather than wrapped in place: it early-returns
+    // in nine places, and every one of them must keep meaning "stop handling this
+    // key", not "skip the catch".
+    function handleKeydown(e) {
       if (!STATE) return;
       if (e.key === 'Escape') {
         if (STATE.ui && STATE.ui.inspect) {
@@ -6235,7 +6520,7 @@
       if (e.key.toLowerCase() === 'e') {
         endPlayerTurn(STATE);
         render();
-        saveGame(STATE);
+        checkpoint(STATE);
         return;
       }
       // 1-9 then 0 for the tenth. HAND_SIZE is 10, so binding only 1-9 left the
@@ -6254,9 +6539,9 @@
           if (card) playCard(STATE, card.uid);
         }
         render();
-        saveGame(STATE);
+        checkpoint(STATE);
       }
-    });
+    }
 
     function validateContent() {
       const warnings = [];
@@ -6448,6 +6733,16 @@
     function initApp() {
       STATE = { screen: SCREENS.MENU, run: null, combat: null, ui: {}, seed: null, ascension: 0 };
       validateContent();
+
+      // Catch what the two handler boundaries structurally cannot: throws from
+      // rAF callbacks, media element handlers, and any future async work.
+      window.addEventListener('error', (ev) => {
+        logError('window.onerror', (ev && ev.error) || (ev && ev.message) || ev);
+      });
+      window.addEventListener('unhandledrejection', (ev) => {
+        logError('unhandledrejection', (ev && ev.reason) || ev);
+      });
+
       window.CINDER_DEBUG = {
         getState: () => STATE,
         validateContent,
@@ -6458,7 +6753,24 @@
         autoplay,
         autoplayAll,
         continueEndless: () => continueEndlessRun(STATE),
-        startSeed: (seed, characterId, ascension) => { startNewRun({ seed, characterId: characterId || 'cinder-knight', ascension: ascension || 0 }); goTo(SCREENS.MAP); }
+        startSeed: (seed, characterId, ascension) => { startNewRun({ seed, characterId: characterId || 'cinder-knight', ascension: ascension || 0 }); goTo(SCREENS.MAP); },
+        // Read by tools/cdp-verify.mjs. A caught error is invisible to
+        // Runtime.exceptionThrown, so the gate asserts on this too.
+        errorLog: () => _errorLog.slice(),
+        // Test hook: inject a card whose custom() throws, to prove the boundary
+        // rolls back rather than leaving the run half-mutated.
+        injectThrowingCard: () => {
+          CARDS_DB['test-throw'] = {
+            id: 'test-throw', name: 'Test Throw', cost: 0, type: CARD_TYPES.SKILL,
+            rarity: CARD_RARITIES.BASIC, character: 'SHARED', target: 'SELF',
+            desc: () => 'Throws on play.',
+            custom: () => { throw new Error('deliberate test throw'); }
+          };
+          const inst = { uid: uid(), defId: 'test-throw', upgraded: false };
+          STATE.combat.hand.push(inst);
+          render();
+          return inst.uid;
+        }
       };
 
       // Persistent sound toggle + first-gesture audio unlock.
