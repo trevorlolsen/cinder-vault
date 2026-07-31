@@ -2134,6 +2134,24 @@
     // passes a treasure and a shop. (Floors 1, 15 and 16 are reserved in
     // generateMap itself as combat / rest / boss.)
     const GUARANTEED_FLOORS = { 5: NODE_TYPES.TREASURE, 9: NODE_TYPES.SHOP };
+    // Act 2 reserves a SECOND shop, and that is the load-bearing part of it.
+    // rollCombatGold inflates 15% per act, so an Act 2 with Act 1's single shop
+    // hands you a larger and larger pile of gold with nowhere to spend it.
+    // Treasure drops to one because Act 2 pays relics out of its denser elites.
+    const GUARANTEED_FLOORS_ACT2 = { 4: NODE_TYPES.TREASURE, 8: NODE_TYPES.SHOP, 12: NODE_TYPES.SHOP };
+    function guaranteedFloorsFor(act) {
+      return act >= 2 ? GUARANTEED_FLOORS_ACT2 : GUARANTEED_FLOORS;
+    }
+
+    // Elite node weight by act, highest floor threshold first:
+    // [fromFloor, weight, weightAtAscension2+]. Act 1's rows are the exact
+    // numbers this was written with as three inline literals; Act 2 starts the
+    // ramp three floors earlier and ends it higher, because by then you have a
+    // deck worth spending on a relic. Act 3+ reuses Act 2's.
+    const ELITE_RAMP = {
+      1: [[6, 0.18, 0.24], [3, 0.10, 0.10]],
+      2: [[5, 0.26, 0.34], [2, 0.16, 0.16]]
+    };
 
     const RARITY_WEIGHTS = { COMMON: 0.6, UNCOMMON: 0.3, RARE: 0.1 };
     const ELITE_RARITY_WEIGHTS = { COMMON: 0.45, UNCOMMON: 0.35, RARE: 0.20 };
@@ -4533,13 +4551,21 @@
 
     // ============ 5. MAP GENERATION ============
 
-    function generateMap() {
+    function generateMap(act) {
       const nodes = [];
       const nodeIds = {};
+      act = act || 1;
+      const guaranteed = guaranteedFloorsFor(act);
 
       // ELITE is capped high enough that the floor-6+ weight actually spreads
       // across the back half instead of exhausting itself by floor 8.
-      const nodeCaps = { ELITE: 8, SHOP: 3, TREASURE: 3, REST: 6 };
+      //
+      // Act 2 raises the elite cap and lowers the rest cap: the same sixteen
+      // floors, but you are asked to spend them differently. Shops go to 3 with
+      // two of them guaranteed (see GUARANTEED_FLOORS_ACT2).
+      const nodeCaps = act >= 2
+        ? { ELITE: 10, SHOP: 3, TREASURE: 2, REST: 5 }
+        : { ELITE: 8, SHOP: 3, TREASURE: 3, REST: 6 };
       let nodeCounts = { ELITE: 0, SHOP: 0, TREASURE: 0, REST: 0 };
 
       for (let floor = 1; floor <= LAYOUT.FLOORS; floor++) {
@@ -4567,19 +4593,23 @@
             nodeType = NODE_TYPES.BOSS;
           } else if (floor === LAYOUT.FLOORS - 1) {
             nodeType = NODE_TYPES.REST;
-          } else if (GUARANTEED_FLOORS[floor]) {
+          } else if (guaranteed[floor]) {
             // Whole reserved floors (like the boss/rest floors) are how we make
             // sure a shop and a treasure are reachable on EVERY path. Weighted
             // placement used to leave ~45% of runs with no shop at all, which
             // made gold and the gold relics dead in those runs.
-            nodeType = GUARANTEED_FLOORS[floor];
+            nodeType = guaranteed[floor];
           } else {
             // Elites ramp up in the back half so taking one is a real
             // risk/reward call rather than a rare coin flip.
-            const eliteWeight = nodeCounts.ELITE >= nodeCaps.ELITE ? 0
-              : floor >= 6 ? ((STATE && STATE.ascension >= 2) ? 0.24 : 0.18)
-              : floor >= 3 ? 0.10
-              : 0;
+            const hard = !!(STATE && STATE.ascension >= 2);
+            const ramp = ELITE_RAMP[act] || ELITE_RAMP[2];
+            let eliteWeight = 0;
+            if (nodeCounts.ELITE < nodeCaps.ELITE) {
+              for (const [from, w, wHard] of ramp) {
+                if (floor >= from) { eliteWeight = hard ? wHard : w; break; }
+              }
+            }
             const weights = {
               [NODE_TYPES.COMBAT]: 0.42,
               [NODE_TYPES.EVENT]: 0.20,
@@ -5477,7 +5507,7 @@
       healRun(game, Math.floor(game.run.maxHp * 0.25), 'Endless respite');
       game.run.bossId = rollBossFor(game, game.act);
       game.run.bossName = ENEMIES_DB[game.run.bossId].name;
-      game.run.map = generateMap();
+      game.run.map = generateMap(game.act);
       goTo(SCREENS.MAP);
     }
 
@@ -5943,7 +5973,7 @@
       // and cannot be drawn here at all.
       STATE.run.bossId = rollBossFor(STATE, 1);
       STATE.run.bossName = ENEMIES_DB[STATE.run.bossId].name;
-      STATE.run.map = generateMap();
+      STATE.run.map = generateMap(1);
       clearSave();
       // No render here. This leaves STATE on the MENU screen and every caller
       // without exception navigates immediately afterwards — startGame and
@@ -7386,7 +7416,23 @@
               </div>
             </div>
             <div class="run-seed-line">Seed <code>${STATE.seed}</code></div>
-            <button class="new-run-button" data-action="continueEndless">Continue Into Deeper Vault</button>
+            ${(() => {
+              // "Continue Into Deeper Vault" read as an endless-mode toggle, which
+              // is exactly what it was. Act 2 now has its own encounters, elites,
+              // map shape and boss pool, so the button names the act and the line
+              // above names what is waiting — and because the pools are disjoint,
+              // what is named there can never be the corpse this screen is
+              // celebrating. The names sit on their own line rather than in the
+              // button because a long button label is how the 1000x660 minimum
+              // gets broken.
+              const nextAct = (STATE.act || 1) + 1;
+              const numeral = ['', 'I', 'II', 'III', 'IV', 'V'][nextAct] || String(nextAct);
+              const names = (ACT_TABLES[nextAct] || ACT_TABLES[2]).bosses
+                .filter(id => id !== STATE.run.bossId)
+                .map(id => ENEMIES_DB[id].name).join(' or ');
+              return `${names ? `<div class="run-seed-line">Below: ${names}</div>` : ''}
+            <button class="new-run-button" data-action="continueEndless">Descend into Act ${numeral}</button>`;
+            })()}
             <button class="new-run-button" data-action="newRun">Play Again (same character)</button>
             <button class="new-run-button" data-action="returnToMenu">Return to Menu</button>
           </div>
@@ -8307,10 +8353,24 @@
         if (!boon.id || !boon.label || typeof boon.apply !== 'function') warnings.push(`Boon missing fields: ${boon.id || 'unknown'}`);
       }
       // Reserved floors must name a real node type and sit inside the map.
-      for (const [floor, type] of Object.entries(GUARANTEED_FLOORS)) {
-        const f = parseInt(floor, 10);
-        if (!(f > 1 && f < LAYOUT.FLOORS - 1)) warnings.push(`GUARANTEED_FLOORS floor ${floor} collides with a reserved floor`);
-        if (!Object.values(NODE_TYPES).includes(type)) warnings.push(`GUARANTEED_FLOORS floor ${floor} has unknown node type: ${type}`);
+      for (const [label, table] of [['GUARANTEED_FLOORS', GUARANTEED_FLOORS], ['GUARANTEED_FLOORS_ACT2', GUARANTEED_FLOORS_ACT2]]) {
+        for (const [floor, type] of Object.entries(table)) {
+          const f = parseInt(floor, 10);
+          if (!(f > 1 && f < LAYOUT.FLOORS - 1)) warnings.push(`${label} floor ${floor} collides with a reserved floor`);
+          if (!Object.values(NODE_TYPES).includes(type)) warnings.push(`${label} floor ${floor} has unknown node type: ${type}`);
+        }
+      }
+      // Every act's ramp must cover the floors its guaranteed table does not, or
+      // an act silently generates a map with no elites at all.
+      for (const [act, ramp] of Object.entries(ELITE_RAMP)) {
+        if (!ramp.length) warnings.push(`ELITE_RAMP act ${act} is empty`);
+        for (const row of ramp) {
+          if (row.length !== 3) warnings.push(`ELITE_RAMP act ${act} row must be [fromFloor, weight, weightHard]`);
+          if (row[2] < row[1]) warnings.push(`ELITE_RAMP act ${act} floor ${row[0]}: ascension weight is lower than base`);
+        }
+        for (let i = 1; i < ramp.length; i++) {
+          if (ramp[i][0] >= ramp[i - 1][0]) warnings.push(`ELITE_RAMP act ${act} rows must be ordered highest floor first`);
+        }
       }
       // Walks ACT_TABLES, not the Act 1 tables directly: scoping encounters by act
       // without scoping the linter by act would have left every Act 2 table
