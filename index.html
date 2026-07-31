@@ -1830,6 +1830,21 @@
       text-align: left;
     }
 
+    /* Shown when Continue Run finds a save it cannot load. Body text colour,
+       not danger-red: it sits on the menu panel and must hold 4.5:1. */
+    .menu-notice {
+      margin: 8px 0 4px;
+      padding: 8px 10px;
+      border: 1px solid var(--color-danger);
+      border-radius: 4px;
+      font-size: var(--fs-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .reward-summary {
       border: 1px solid var(--border-color);
       background: var(--bg-dark);
@@ -4359,6 +4374,11 @@
       game.ui.history = false;
       game.ui.settings = false;
       game.act = game.act || 1;
+      // Saves written on non-combat screens by older builds still carry the
+      // finished combat object. Stale combat renders every potion usable and
+      // lets checkCombatEnd re-run a settled payout, so drop it on load. Not a
+      // shape change — combat: null is the normal between-fights state.
+      if (game.screen !== SCREENS.COMBAT) game.combat = null;
       if (game.combat && game.combat.enemies) {
         for (const enemy of game.combat.enemies) enemy.template = ENEMIES_DB[enemy.defId];
       }
@@ -4377,7 +4397,9 @@
         const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
         if (!saved || !saved.state || saved.version < 2 || saved.version > SAVE_VERSION) return false;
         candidate = rehydrateState(migrateSave(saved.state));
-        candidateRng = saved.rngState || candidate.seed || 1;
+        // != null, not ||: 0 is a legal mulberry32 state and must not be
+        // silently replaced with a reseed.
+        candidateRng = saved.rngState != null ? saved.rngState : (candidate.seed || 1);
       } catch (e) { logError('loadGame/parse', e); return false; }
 
       // Commit to STATE only once we know the save can actually be drawn.
@@ -4470,7 +4492,7 @@
           const saved = JSON.parse(_lastGood);
           if (saved && saved.state) {
             STATE = rehydrateState(migrateSave(saved.state));
-            _rngState = saved.rngState || STATE.seed || 1;
+            _rngState = saved.rngState != null ? saved.rngState : (STATE.seed || 1);
             restored = true;
           }
         } catch (e) { logError('rollback', e); }
@@ -4871,17 +4893,20 @@
       game.run.floor = node.floor;
 
       switch (node.type) {
+        // The combat branches guard the goTo: startCombat can end the run on
+        // the spot (turn-1 blight against a near-dead player), leaving combat
+        // null and the screen on GAMEOVER. Do not drag the corpse back in.
         case NODE_TYPES.COMBAT:
           startCombat(game, selectEncounter(game, false));
-          goTo(SCREENS.COMBAT);
+          if (game.combat) goTo(SCREENS.COMBAT);
           break;
         case NODE_TYPES.ELITE:
           startCombat(game, selectEncounter(game, true));
-          goTo(SCREENS.COMBAT);
+          if (game.combat) goTo(SCREENS.COMBAT);
           break;
         case NODE_TYPES.BOSS:
           startCombat(game, selectEncounter(game, 'boss'));
-          goTo(SCREENS.COMBAT);
+          if (game.combat) goTo(SCREENS.COMBAT);
           break;
         case NODE_TYPES.REST:
           goTo(SCREENS.REST);
@@ -5576,8 +5601,13 @@
     }
 
     function checkCombatEnd(game) {
+      // Re-entry guard. Both terminal branches below null game.combat, so a
+      // settled combat cannot pay out twice — this used to be reachable from
+      // the map via any self-target potion, which re-ran the whole reward.
+      if (!game.combat) return;
       if (game.run.hp <= 0) {
         recordRunResult(game, false);
+        game.combat = null;
         goTo(SCREENS.GAMEOVER);
         return;
       }
@@ -5653,17 +5683,24 @@
       // else — and BOSS_RARITY_WEIGHTS, a 25%-rare table written specifically
       // for this moment, had never once been consulted. It matters more now
       // that Victory offers a real descent into Act II rather than just ending.
-      // recordRunResult still fires here, so the win is banked before the
-      // player picks; leaving the card screen goes to Victory, not the map.
-      if (isBoss) recordRunResult(game, true);
-
+      //
+      // The boss win is banked in selectCardReward, not here: recordRunResult
+      // clears the save, but CARD_REWARD is a savable screen, so the very next
+      // checkpoint used to resurrect the file and Continue Run replayed this
+      // payout with the win already recorded.
+      //
+      // The combat is settled — drop it. isBoss travels in ui.combatReward.
+      game.combat = null;
       goTo(SCREENS.CARD_REWARD);
     }
 
     function startEventCombat(game, enemyIds, rewardOverride) {
       game.ui.eventRewardOverride = rewardOverride || {};
       startCombat(game, { enemies: enemyIds && enemyIds.length ? enemyIds : ['warden'] });
-      goTo(SCREENS.COMBAT);
+      // startCombat can end the run on the spot (turn-1 blight against a
+      // near-dead player): combat is already null and the screen is GAMEOVER.
+      // Do not drag the corpse back into a fight.
+      if (game.combat) goTo(SCREENS.COMBAT);
     }
 
     function continueEndlessRun(game) {
@@ -6128,6 +6165,13 @@
       const wasBoss = !!(game.ui.combatReward && game.ui.combatReward.isBoss);
       game.ui.cardRewardChoices = null;
       game.ui.combatReward = null;
+      // Bank the boss win only after the pick. recordRunResult clears the
+      // save, and the next stop is VICTORY, which saveGame refuses — so the
+      // file stays cleared. Banking inside checkCombatEnd left a savable
+      // CARD_REWARD screen between the clear and Victory, and the checkpoint
+      // there re-wrote the save it had just deleted. As a bonus, the save that
+      // exists during the boss pick is now a legitimately resumable moment.
+      if (wasBoss) recordRunResult(game, true);
       // goTo() and the dispatch tail both save; a third write here was pure cost.
       goTo(wasBoss ? SCREENS.VICTORY : SCREENS.MAP);
     }
@@ -6514,6 +6558,8 @@
             <h1 class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</h1>
             <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v7</div>
             ${saveButton}
+            ${STATE.ui.menuNotice ? `<div class="menu-notice" role="alert">${STATE.ui.menuNotice}
+              <button class="inline-chip-button" data-action="clearDeadSave">Delete that save</button></div>` : ''}
             <div class="menu-section-label">Start a new run</div>
             <div class="menu-characters">${characterButtons}</div>
             <div class="seed-row">
@@ -8082,7 +8128,26 @@
         }
 
         case 'continueRun':
-          if (!loadGame()) render();
+          if (!loadGame()) {
+            // The save exists but cannot be loaded (wrong version, or names
+            // content that no longer exists). Silence here left a Continue
+            // button that did nothing, forever. Say so, and offer the fix.
+            STATE.ui = STATE.ui || {};
+            STATE.ui.menuNotice = 'This save could not be loaded — it was written by an incompatible version of the game.';
+            render();
+          }
+          break;
+
+        case 'clearDeadSave':
+          askConfirm(
+            'Delete the unloadable save?',
+            'This deletes only the stuck run. Your run history, unlocks and settings are kept.',
+            'Delete it', 'doClearDeadSave', true);
+          break;
+
+        case 'doClearDeadSave':
+          clearSave();
+          STATE.ui.menuNotice = null;
           break;
 
         case 'travelNode':
