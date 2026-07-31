@@ -682,6 +682,42 @@
     .confirm-actions { display: flex; gap: 0.75rem; }
     .confirm-actions .choice-button { flex: 1 1 0; }
 
+    /* Settings. Between the confirm gate and the reading material. */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 74;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .settings-panel {
+      display: flex;
+      flex-direction: column;
+      width: min(34rem, 100%);
+      max-height: 100%;
+      padding: 1.5rem 1.75rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-panel);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+    .settings-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .setting-row {
+      display: grid;
+      grid-template-columns: 9rem 1fr auto;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.9rem;
+    }
+    .setting-label { color: var(--text-primary); font-size: var(--fs-sm); }
+    .setting-value { color: var(--text-muted); font-size: var(--fs-sm); min-width: 3rem; text-align: right; }
+    .setting-hint { color: var(--text-muted); font-size: var(--fs-xs); grid-column: 2 / -1; }
+    .setting-slider { width: 100%; accent-color: var(--color-skill); }
+    .setting-toggle.on { border-color: var(--color-heal); color: var(--color-heal); }
+    .settings-danger { border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem; }
+
     /* Run history. Reference material, so it sits under the confirm gate. */
     .history-overlay {
       position: fixed;
@@ -3483,6 +3519,54 @@
       try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) {}
     }
 
+    // ===== SETTINGS =====
+    // Deliberately its OWN store, not part of STATE and not part of the run save:
+    //   - preferences must outlive clearSave(), which abandoning a run calls;
+    //   - they must not force a save-version bump, and this shape needs no
+    //     migration at all. Spreading over defaults (the same trick loadMeta
+    //     uses) means an old stored object silently gains new keys and an
+    //     unknown key is simply carried along.
+    const SETTINGS_KEY = 'cinderVaultSettings';
+
+    function defaultSettings() {
+      // music/sfx keep the values that were compile-time constants until now.
+      return { master: 1, music: 0.35, sfx: 0.6, muted: false, reducedMotion: false };
+    }
+
+    function loadSettings() {
+      let stored = null;
+      try { stored = JSON.parse(localStorage.getItem(SETTINGS_KEY)); } catch (e) {}
+      const s = { ...defaultSettings(), ...(stored || {}) };
+      // Adopt the standalone flag the mute button used before this existed, so
+      // an existing player's choice survives the upgrade.
+      if (!stored) {
+        try { if (localStorage.getItem('cinderMuted') === '1') s.muted = true; } catch (e) {}
+      }
+      // Clamp: these come back from localStorage, which anyone can edit, and a
+      // volume outside 0..1 throws on assignment to a media element.
+      for (const k of ['master', 'music', 'sfx']) {
+        const n = Number(s[k]);
+        s[k] = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : defaultSettings()[k];
+      }
+      s.muted = !!s.muted;
+      s.reducedMotion = !!s.reducedMotion;
+      return s;
+    }
+
+    function saveSettings() {
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); } catch (e) {}
+      // Kept in sync so the pre-settings key never disagrees with the new store.
+      try { localStorage.setItem('cinderMuted', SETTINGS.muted ? '1' : '0'); } catch (e) {}
+    }
+
+    let SETTINGS = loadSettings();
+
+    // The manual reduced-motion override. The CSS media query handles the OS
+    // setting; this class is the in-game toggle on top of it.
+    function applyMotionPreference() {
+      if (document.body) document.body.classList.toggle('reduced-motion', !!SETTINGS.reducedMotion);
+    }
+
     function hasSave() {
       try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
     }
@@ -3562,6 +3646,7 @@
       game.ui.error = null;
       game.ui.confirm = null;    // a pending yes/no must not survive a reload
       game.ui.history = false;
+      game.ui.settings = false;
       game.act = game.act || 1;
       if (game.combat && game.combat.enemies) {
         for (const enemy of game.combat.enemies) enemy.template = ENEMIES_DB[enemy.defId];
@@ -5218,17 +5303,22 @@
         death:  BASE + 'sfx/death.mp3',
         potion: BASE + 'sfx/potion.mp3',
       };
-      const SFX_VOL = { click: 0.3, _default: 0.6 };
-      const MUSIC_VOL = 0.35;
+      // Per-sound trim, relative to the SFX slider. Click is quieter than the
+      // rest because it fires on literally every actionable click.
+      const SFX_TRIM = { click: 0.5, _default: 1 };
 
-      let muted = false;
-      try { muted = localStorage.getItem('cinderMuted') === '1'; } catch (e) {}
+      // Volumes come from SETTINGS now; they used to be the compile-time
+      // constants MUSIC_VOL = 0.35 and SFX_VOL._default = 0.6, which are the
+      // defaults in defaultSettings() so nothing changes for a fresh player.
+      const musicVolume = () => SETTINGS.master * SETTINGS.music;
+      const sfxVolume = (key) => SETTINGS.master * SETTINGS.sfx * (SFX_TRIM[key] || SFX_TRIM._default);
+
       let unlocked = false;
       let curKey = null;      // music key currently selected
       let pendingKey = null;  // desired key before the first gesture unlock
       const musicEl = new Audio();
       musicEl.loop = true;
-      musicEl.volume = MUSIC_VOL;
+      musicEl.volume = musicVolume();
       // A bounded pool of players per sound, grown on demand.
       //
       // This used to be one cached element per sound that sfx() cloneNode()'d on
@@ -5266,9 +5356,10 @@
       function playMusicKey(key) {
         if (!key || !MUSIC_FILES[key]) return;
         curKey = key;
-        if (muted || !unlocked) return;
+        if (SETTINGS.muted || !unlocked) return;
         const src = MUSIC_FILES[key];
         if (!musicEl.src || !musicEl.src.endsWith(src)) { musicEl.src = src; }
+        musicEl.volume = musicVolume();
         const p = musicEl.play();
         if (p && p.catch) p.catch(() => {});
       }
@@ -5296,11 +5387,11 @@
           playMusicKey(key);
         },
         sfx(key) {
-          if (muted || !unlocked) return;
+          if (SETTINGS.muted || !unlocked) return;
           const node = sfxNode(key);
           if (!node) return;
           try {
-            node.volume = SFX_VOL[key] || SFX_VOL._default;
+            node.volume = sfxVolume(key);
             // Rewind a reused player. Guarded: setting currentTime before any
             // metadata has loaded throws, and a fresh element is already at 0.
             if (node.currentTime) node.currentTime = 0;
@@ -5314,14 +5405,28 @@
           playMusicKey(pendingKey || curKey || 'menu');
         },
         toggleMute() {
-          muted = !muted;
-          try { localStorage.setItem('cinderMuted', muted ? '1' : '0'); } catch (e) {}
-          if (muted) musicEl.pause();
-          else if (unlocked) playMusicKey(curKey || 'menu');
-          return muted;
+          SETTINGS.muted = !SETTINGS.muted;
+          saveSettings();
+          applyAudioSettings();
+          return SETTINGS.muted;
         },
-        isMuted() { return muted; },
+        isMuted() { return SETTINGS.muted; },
+        // Called after any settings change so a slider takes effect while the
+        // music is already playing, rather than at the next track change.
+        applySettings: applyAudioSettings,
       };
+
+      function applyAudioSettings() {
+        musicEl.volume = musicVolume();
+        if (SETTINGS.muted) {
+          musicEl.pause();
+        } else if (unlocked && musicEl.paused) {
+          playMusicKey(curKey || 'menu');
+        }
+        // Live SFX players keep the volume they started with; that is fine for
+        // sounds measured in tens of milliseconds, and the pool picks up the new
+        // level on the next play.
+      }
     })();
 
     // Screens that show the run's HP / gold / floor / relics / potions. Everything
@@ -5526,6 +5631,7 @@
                 <div class="stats-box-label">Recent Runs</div>
                 ${recent}
                 ${hasHistory ? '<button class="inline-chip-button history-open" data-action="viewHistory">Full history</button>' : ''}
+                <button class="inline-chip-button history-open" data-action="openSettings">Settings</button>
               </div>
             </div>
             <div class="menu-tagline">
@@ -5923,8 +6029,54 @@
     function overlayHTML() {
       return renderErrorOverlay()
            + renderConfirm()
+           + renderSettings()
            + renderKeyHelp()
            + renderHistory();
+    }
+
+    // An OVERLAY, not a screen, and that is load-bearing: as a screen, saveGame
+    // would persist screen:'SETTINGS' and a reload would strand the player there
+    // with no way back to the run. As an overlay it renders over whatever is
+    // underneath and rehydrateState clears it, exactly like ui.keyHelp.
+    function renderSettings() {
+      if (!STATE.ui || !STATE.ui.settings) return '';
+      const pct = (v) => Math.round(v * 100);
+      const slider = (key, label, value) => `
+        <div class="setting-row">
+          <label class="setting-label" for="set-${key}">${label}</label>
+          <input class="setting-slider" id="set-${key}" type="range" min="0" max="100" step="5"
+                 value="${pct(value)}" data-setting="${key}" aria-label="${label}">
+          <output class="setting-value" id="out-${key}">${pct(value)}%</output>
+        </div>`;
+      const toggle = (key, label, on, hint) => `
+        <div class="setting-row">
+          <label class="setting-label" for="set-${key}">${label}</label>
+          <button type="button" class="inline-chip-button setting-toggle${on ? ' on' : ''}" id="set-${key}"
+                  data-action="toggleSetting" data-key="${key}" aria-pressed="${on}">${on ? 'On' : 'Off'}</button>
+          <span class="setting-hint">${hint || ''}</span>
+        </div>`;
+
+      return `
+        <div class="settings-overlay">
+          <div class="settings-panel">
+            <h2 class="panel-title">Settings</h2>
+            <div class="settings-content">
+              ${slider('master', 'Master volume', SETTINGS.master)}
+              ${slider('music', 'Music', SETTINGS.music)}
+              ${slider('sfx', 'Sound effects', SETTINGS.sfx)}
+              ${toggle('muted', 'Mute all', SETTINGS.muted)}
+              ${toggle('reducedMotion', 'Reduced motion', SETTINGS.reducedMotion, 'Stops shake, sprites and floating numbers.')}
+              <div class="settings-danger">
+                <button type="button" class="choice-button removal-button" data-action="askClearSave">
+                  <span class="choice-label">Clear save data</span>
+                  <span class="choice-desc">Deletes the run in progress, run history and ascension unlocks.</span>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="leave-button" data-action="closeSettings">Close</button>
+          </div>
+        </div>
+      `;
     }
 
     // Generic yes/no gate. askConfirm() stores the action to dispatch on yes, so
@@ -6632,6 +6784,8 @@
             <div class="status-item stat-floor">${icon('floor')} <span>${STATE.run.floor}/${LAYOUT.FLOORS}</span></div>
             <div class="status-item">${STATE.run.characterName || 'Runner'} A${STATE.ascension || 0} · Act ${STATE.act || 1}</div>
             <button class="inline-chip-button" data-action="viewPile" data-pile="deck">${icon('deck')} Deck ${STATE.run.deck.length}</button>
+            <button class="inline-chip-button" data-action="openSettings"
+                    data-ititle="Settings" data-ibody="Volume, reduced motion, and save data.">Settings</button>
             <button class="inline-chip-button" data-action="abandonRun"
                     data-ititle="Leave run" data-ibody="Abandon this run and return to the title screen. The run is recorded as a loss and the save is deleted.">Menu</button>
           </div>
@@ -6879,6 +7033,40 @@
           break;
 
         case 'returnToMenu':
+          returnToMenu();
+          break;
+
+        case 'openSettings':
+          STATE.ui.settings = true;
+          break;
+
+        case 'closeSettings':
+          STATE.ui.settings = false;
+          break;
+
+        case 'toggleSetting': {
+          const key = btn.dataset.key;
+          if (key === 'muted' || key === 'reducedMotion') {
+            SETTINGS[key] = !SETTINGS[key];
+            saveSettings();
+            AudioEngine.applySettings();
+            applyMotionPreference();
+            syncMuteButton();
+          }
+          break;
+        }
+
+        case 'askClearSave':
+          askConfirm(
+            'Clear all save data?',
+            'This deletes the run in progress, your run history, and every ascension unlock. Settings are kept. This cannot be undone.',
+            'Delete everything', 'doClearSave', true);
+          break;
+
+        case 'doClearSave':
+          clearSave();
+          try { localStorage.removeItem(META_KEY); } catch (e) {}
+          STATE.ui.settings = false;
           returnToMenu();
           break;
 
@@ -7172,6 +7360,46 @@
       }
     });
 
+    function syncMuteButton() {
+      const btn = document.getElementById('mute-btn');
+      if (btn) btn.classList.toggle('muted', !!SETTINGS.muted);
+    }
+
+    // ===== The second delegated listener on #app =====
+    //
+    // A THIRD rule, alongside the two in OVERVIEW. A range slider cannot be
+    // driven by the click-only dispatcher: it emits `input` as it is dragged,
+    // and there is no click to hang the value off.
+    //
+    // THIS HANDLER MUST NEVER CALL render(). Re-rendering on `input` would
+    // replace the very slider under the cursor and the drag would die on the
+    // first pixel — the same failure the Tooltip IIFE already documents for
+    // `mouseover`, and it is handled the same way: mutate the DOM directly and
+    // deliberately bypass the render cycle. The panel is redrawn from SETTINGS
+    // the next time anything else renders, and the values agree because both
+    // read the same store.
+    //
+    // Scoped to [data-setting] so it cannot touch anything else, and it does not
+    // set _inDispatch: nothing here mutates run state, so there is nothing to
+    // save and nothing to roll back.
+    document.getElementById('app').addEventListener('input', (e) => {
+      const el = e.target.closest('[data-setting]');
+      if (!el) return;
+      const key = el.dataset.setting;
+      if (!(key in SETTINGS)) return;
+      try {
+        const pct = Math.max(0, Math.min(100, Number(el.value) || 0));
+        SETTINGS[key] = pct / 100;
+        saveSettings();
+        AudioEngine.applySettings();
+        // DOM-only readout update, for the reason above.
+        const out = document.getElementById('out-' + key);
+        if (out) out.textContent = pct + '%';
+      } catch (err) {
+        logError('settings-input:' + key, err);
+      }
+    });
+
     document.addEventListener('keydown', (e) => {
       _inDispatch = true;
       try {
@@ -7199,6 +7427,11 @@
         }
         if (STATE.ui && STATE.ui.history) {
           STATE.ui.history = false;
+          render();
+          return;
+        }
+        if (STATE.ui && STATE.ui.settings) {
+          STATE.ui.settings = false;
           render();
           return;
         }
@@ -7492,19 +7725,23 @@
         }
       };
 
-      // Persistent sound toggle + first-gesture audio unlock.
+      // Persistent sound toggle + first-gesture audio unlock. #mute-btn and the
+      // settings panel are two views of one flag, so each reflects the other.
       const muteBtn = document.getElementById('mute-btn');
       if (muteBtn) {
-        if (AudioEngine.isMuted()) muteBtn.classList.add('muted');
+        syncMuteButton();
         muteBtn.addEventListener('click', () => {
           AudioEngine.unlock();
-          const nowMuted = AudioEngine.toggleMute();
-          muteBtn.classList.toggle('muted', nowMuted);
+          AudioEngine.toggleMute();
+          syncMuteButton();
+          // Redraw only if the panel is open and would now show a stale label.
+          if (STATE.ui && STATE.ui.settings) render();
         });
       }
       window.addEventListener('keydown', () => AudioEngine.unlock(), { once: true });
       window.addEventListener('pointerdown', () => AudioEngine.unlock(), { once: true });
 
+      applyMotionPreference();
       render();
     }
 
