@@ -2781,6 +2781,317 @@
       },
 
       // Curses (unplayable dead weight, added by some events)
+      // ===== v7 Phase 10: pool balance =====
+      // Sized from measured offer rates, not vibes. A 16-floor run offers about
+      // 16 commons, 9 uncommons and 3 rares. P(a given card is offered at least
+      // once) = 1-(1-1/N)^offers, so at the old counts a Seer or Tinker player
+      // saw 52% of their five-card rare pool EVERY run — a rare described the
+      // class instead of defining the run. Knight sat at 35% off eight.
+      //
+      // Target is a symmetric 8 COMMON / 10 UNCOMMON / 9 RARE per class, which
+      // takes rares to 31% and makes the guard statable rather than a floor
+      // Knight happened to clear. Commons deliberately do NOT grow: at 16 offers
+      // you enumerate ~87% of an 8-card pool regardless, so growing them is the
+      // least efficient design effort available. Tinker gets two only because 6
+      // is thin for the class whose identity is opening-hand consistency.
+
+      // --- Cinder Knight: +2 uncommon, +1 rare ---
+      'kindle': {
+        id: 'kindle', name: 'Kindle', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'cinder-knight',
+        target: 'SELF', values: { grace: 2 }, upgradedValues: { grace: 3 },
+        effects: [{ type: 'APPLY_SELF_STATUS', status: 'grace', key: 'grace' }, { type: 'DRAW', value: 1 }],
+        desc: (up) => `Gain ${up ? 3 : 2} Grace. Draw 1.`
+      },
+      'cauterize': {
+        id: 'cauterize', name: 'Cauterize', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'cinder-knight',
+        target: 'SELF', exhaust: true,
+        desc: (up) => `Gain ${up ? 11 : 8} block. Heal ${up ? 6 : 4} HP. Exhaust.`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          gainBlock(game.combat.player, up ? 11 : 8);
+          healRun(game, up ? 6 : 4, 'Cauterize');
+        }
+      },
+      'last-rite': {
+        id: 'last-rite', name: 'Last Rite', cost: 3, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'cinder-knight',
+        target: 'ENEMY_SINGLE', exhaust: true,
+        // The class's only win condition that ignores Might entirely. Every other
+        // Knight rare scales through it, so a Might-hosing enemy (Guardian turtles
+        // the moment you reach 2) flattened the whole class at once.
+        desc: (up) => `Deal damage equal to ${up ? '1.5×' : ''} the HP you are missing. Exhaust.`,
+        custom: (game, target, card) => {
+          const missing = Math.max(0, game.run.maxHp - game.run.hp);
+          const mult = (card && card.upgraded) ? 1.5 : 1;
+          dealDamage(game, game.combat.player, target, Math.floor(missing * mult));
+        }
+      },
+
+      // --- Plague Seer: +3 uncommon, +4 rare ---
+      'blightbrand': {
+        id: 'blightbrand', name: 'Blightbrand', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'plague-seer',
+        target: 'ENEMY_SINGLE', values: { dmg: 7, blight: 2 }, upgradedValues: { dmg: 10, blight: 3 },
+        effects: [{ type: 'DAMAGE', key: 'dmg' }, { type: 'APPLY_STATUS', status: 'blight', key: 'blight' }],
+        desc: (up) => `Deal ${up ? 10 : 7} damage. Apply ${up ? 3 : 2} Blight.`
+      },
+      'sap-strength': {
+        id: 'sap-strength', name: 'Sap Strength', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'plague-seer',
+        target: 'ENEMY_SINGLE', values: { sapped: 2, exposed: 1 }, upgradedValues: { sapped: 3, exposed: 2 },
+        effects: [{ type: 'APPLY_STATUS', status: 'sapped', key: 'sapped' }, { type: 'APPLY_STATUS', status: 'exposed', key: 'exposed' }],
+        desc: (up) => `Apply ${up ? 3 : 2} Sapped and ${up ? 2 : 1} Exposed.`
+      },
+      'rot-ward': {
+        id: 'rot-ward', name: 'Rot Ward', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'plague-seer',
+        target: 'SELF',
+        desc: (up) => `Gain ${up ? 9 : 6} block. Gain 1 Aegis if any enemy is Blighted.`,
+        custom: (game, target, card) => {
+          gainBlock(game.combat.player, (card && card.upgraded) ? 9 : 6);
+          if (game.combat.enemies.some(e => e.alive && e.statuses.blight)) {
+            applyPlayerStatus(game, game.combat.player, 'aegis', 1);
+          }
+        }
+      },
+      'contagion': {
+        id: 'contagion', name: 'Contagion', cost: 2, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
+        target: 'SELF',
+        // Dead in a duel, exponential in a pack. A rare that asks a question of
+        // the encounter rather than adding a flat number.
+        desc: (up) => `At the start of each turn, every Blighted enemy spreads ${up ? 3 : 2} Blight to each other enemy.`,
+        onTurnStart: (game, card) => {
+          const v = (card && card.upgraded) ? 3 : 2;
+          const alive = game.combat.enemies.filter(e => e.alive);
+          if (alive.length < 2) return;
+          const carriers = alive.filter(e => e.statuses.blight);
+          for (const c of carriers) for (const e of alive) if (e !== c) applyPlayerStatus(game, e, 'blight', v);
+        }
+      },
+      'miasma-shroud': {
+        id: 'miasma-shroud', name: 'Miasma Shroud', cost: 2, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
+        target: 'SELF',
+        // Lets a Blight deck survive without pivoting to Knight-style block, and
+        // reads the stacks BEFORE they tick (powers fire at 4466, enemy Blight
+        // ticks in runEnemyTurn), so the number shown is the threat still live.
+        desc: (up) => `At the start of each turn, gain block equal to the total Blight on all enemies (max ${up ? 20 : 15}).`,
+        onTurnStart: (game, card) => {
+          const cap = (card && card.upgraded) ? 20 : 15;
+          const total = game.combat.enemies.filter(e => e.alive)
+            .reduce((n, e) => n + (e.statuses.blight || 0), 0);
+          if (total > 0) gainBlock(game.combat.player, Math.min(cap, total));
+        }
+      },
+      'necrotic-lance': {
+        id: 'necrotic-lance', name: 'Necrotic Lance', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
+        target: 'ENEMY_SINGLE',
+        // The counterpart to Death's Bloom, which CONSUMES the stacks. Burst that
+        // keeps the engine running, so the two rares compete instead of stacking.
+        desc: (up) => `Deal ${up ? 14 : 10} damage, then deal damage equal to the target's Blight.`,
+        custom: (game, target, card) => {
+          dealDamage(game, game.combat.player, target, (card && card.upgraded) ? 14 : 10);
+          const blt = target.statuses.blight || 0;
+          if (target.alive && blt > 0) dealDamage(game, game.combat.player, target, blt);
+        }
+      },
+      'prophets-toll': {
+        id: 'prophets-toll', name: "Prophet's Toll", cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
+        target: 'ENEMY_ALL', ethereal: true,
+        // Only possible at all now that APPLY_STATUS fans out on ENEMY_ALL; before
+        // this phase it would have been a second Toxic Cloud, i.e. a no-op.
+        values: { sapped: 3, exposed: 3 }, upgradedValues: { sapped: 4, exposed: 4 },
+        effects: [{ type: 'APPLY_STATUS', status: 'sapped', key: 'sapped' },
+                  { type: 'APPLY_STATUS', status: 'exposed', key: 'exposed' }],
+        desc: (up) => `Apply ${up ? 4 : 3} Sapped and ${up ? 4 : 3} Exposed to ALL enemies. Ethereal.`
+      },
+
+      // --- Vault Tinker: +2 common, +3 uncommon, +4 rare ---
+      'spare-plating': {
+        id: 'spare-plating', name: 'Spare Plating', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
+        target: 'SELF', values: { block: 6 }, upgradedValues: { block: 9 },
+        effects: [{ type: 'BLOCK', key: 'block' }],
+        desc: (up) => `Gain ${up ? 9 : 6} block.`
+      },
+      'ratchet': {
+        id: 'ratchet', name: 'Ratchet', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
+        target: 'SELF', values: { block: 3 }, upgradedValues: { block: 5 },
+        effects: [{ type: 'BLOCK', key: 'block' }, { type: 'DRAW', value: 1 }],
+        desc: (up) => `Gain ${up ? 5 : 3} block. Draw 1.`
+      },
+      'scrap-shot': {
+        id: 'scrap-shot', name: 'Scrap Shot', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
+        target: 'ENEMY_SINGLE',
+        desc: (up) => `Deal ${up ? 6 : 4} damage, plus 1 for every 2 cards in your discard pile (max +${up ? 8 : 6}).`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          const bonus = Math.min(up ? 8 : 6, Math.floor(game.combat.discardPile.length / 2));
+          dealDamage(game, game.combat.player, target, (up ? 6 : 4) + bonus);
+        }
+      },
+      'coolant-flush': {
+        id: 'coolant-flush', name: 'Coolant Flush', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
+        target: 'SELF', values: { warded: 2 }, upgradedValues: { warded: 3 },
+        effects: [{ type: 'APPLY_SELF_STATUS', status: 'warded', key: 'warded' }, { type: 'DRAW', value: 1 }],
+        desc: (up) => `Gain ${up ? 3 : 2} Warded. Draw 1.`
+      },
+      'jury-rig': {
+        id: 'jury-rig', name: 'Jury-Rig', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
+        target: 'SELF', exhaust: true,
+        desc: (up) => `Gain ${up ? 2 : 1} energy. Draw ${up ? 2 : 1}. Exhaust.`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          game.combat.energy += up ? 2 : 1;
+          drawCards(game, up ? 2 : 1);
+        }
+      },
+      'failsafe-array': {
+        id: 'failsafe-array', name: 'Failsafe Array', cost: 1, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
+        target: 'SELF',
+        // A renewable Aegis stream: the game's first real answer to Slag Titan's
+        // Brittle loop and the Hollow Choir's second verse.
+        desc: (up) => `At the start of each turn, gain 1 Aegis and ${up ? 5 : 3} block.`,
+        onTurnStart: (game, card) => {
+          applyPlayerStatus(game, game.combat.player, 'aegis', 1);
+          gainBlock(game.combat.player, (card && card.upgraded) ? 5 : 3);
+        }
+      },
+      'scrap-cannon': {
+        id: 'scrap-cannon', name: 'Scrap Cannon', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
+        target: 'ENEMY_ALL',
+        // Capped deliberately: Tinker decks reach 15+ discards by turn 4, and
+        // uncapped this would simply beat Whirlwind on the class that also draws
+        // its whole deck.
+        desc: (up) => `Deal ${up ? 5 : 4} damage to ALL enemies, plus 1 per card in your discard pile (max +10).`,
+        custom: (game, target, card) => {
+          const d = ((card && card.upgraded) ? 5 : 4) + Math.min(10, game.combat.discardPile.length);
+          for (const e of game.combat.enemies.filter(x => x.alive)) dealDamage(game, game.combat.player, e, d);
+        }
+      },
+      'salvage-rig': {
+        id: 'salvage-rig', name: 'Salvage Rig', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
+        target: 'SELF', exhaust: true,
+        // Exhaust is what stops it looping itself back into hand forever.
+        desc: (up) => `Return ${up ? 3 : 2} random cards from your discard pile to your hand. Exhaust.`,
+        custom: (game, target, card) => {
+          const n = (card && card.upgraded) ? 3 : 2;
+          for (let i = 0; i < n; i++) {
+            if (!game.combat.discardPile.length || game.combat.hand.length >= LAYOUT.HAND_SIZE) break;
+            const idx = Math.floor(rand() * game.combat.discardPile.length);
+            game.combat.hand.push(game.combat.discardPile.splice(idx, 1)[0]);
+          }
+        }
+      },
+      'ordnance-rack': {
+        id: 'ordnance-rack', name: 'Ordnance Rack', cost: 2, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
+        target: 'SELF',
+        // The first play-triggered power in the game (see the onCardPlayed hook
+        // added to playCard this phase).
+        desc: (up) => `Whenever you play an Attack, deal ${up ? 4 : 3} damage to ALL enemies.`,
+        onCardPlayed: (game, card, ctx) => {
+          if (!ctx || !ctx.def || ctx.def.type !== CARD_TYPES.ATTACK) return;
+          const d = (card && card.upgraded) ? 4 : 3;
+          for (const e of game.combat.enemies.filter(x => x.alive)) {
+            dealDamage(game, game.combat.player, e, d, { isAttack: false });
+          }
+        }
+      },
+
+      // --- SHARED: +1 common, +2 uncommon, +3 rare ---
+      // generateShopCards reserves one neutral slot filtered to
+      // `character === 'SHARED' && rarity !== BASIC`. That pool was SIX cards
+      // with ZERO rares, so the slot was a rotation a returning player had
+      // memorised and a rare could never appear in it. Twelve now, three rare.
+      // All three are conditional on purpose: an unconditionally strong neutral
+      // rare would flatten the class identities it sits beside.
+      'steady-footing': {
+        id: 'steady-footing', name: 'Steady Footing', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'SHARED',
+        target: 'SELF', values: { block: 5, grace: 1 }, upgradedValues: { block: 7, grace: 2 },
+        effects: [{ type: 'BLOCK', key: 'block' }, { type: 'APPLY_SELF_STATUS', status: 'grace', key: 'grace' }],
+        desc: (up) => `Gain ${up ? 7 : 5} block and ${up ? 2 : 1} Grace.`
+      },
+      'scavenge': {
+        id: 'scavenge', name: 'Scavenge', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
+        target: 'SELF', exhaust: true,
+        desc: (up) => `Draw ${up ? 3 : 2}. Gain ${up ? 8 : 5} gold. Exhaust.`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          drawCards(game, up ? 3 : 2);
+          game.run.gold += up ? 8 : 5;
+        }
+      },
+      'measured-strike': {
+        id: 'measured-strike', name: 'Measured Strike', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
+        target: 'ENEMY_SINGLE', values: { dmg: 9, block: 6 }, upgradedValues: { dmg: 12, block: 9 },
+        effects: [{ type: 'DAMAGE', key: 'dmg' }, { type: 'BLOCK', key: 'block' }],
+        desc: (up) => `Deal ${up ? 12 : 9} damage. Gain ${up ? 9 : 6} block.`
+      },
+      'last-stand': {
+        id: 'last-stand', name: 'Last Stand', cost: 2, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'SHARED',
+        target: 'SELF',
+        desc: (up) => `Gain ${up ? 18 : 14} block. If you are below half HP, gain it again.`,
+        custom: (game, target, card) => {
+          const v = (card && card.upgraded) ? 18 : 14;
+          gainBlock(game.combat.player, v);
+          if (game.run.hp * 2 < game.run.maxHp) gainBlock(game.combat.player, v);
+        }
+      },
+      'ancestral-rite': {
+        id: 'ancestral-rite', name: 'Ancestral Rite', cost: 2, type: CARD_TYPES.POWER, rarity: CARD_RARITIES.RARE, character: 'SHARED',
+        target: 'SELF',
+        // Deliberately slower than Inner Furnace on offence and Ember Plating on
+        // defence: the generalist's version, worth taking when your own class
+        // rares have not shown up.
+        desc: (up) => `At the start of each turn, gain 1 Might and ${up ? 2 : 1} Warded.`,
+        onTurnStart: (game, card) => {
+          applyPlayerStatus(game, game.combat.player, 'might', 1);
+          applyPlayerStatus(game, game.combat.player, 'warded', (card && card.upgraded) ? 2 : 1);
+        }
+      },
+      'vault-breaker': {
+        id: 'vault-breaker', name: 'Vault Breaker', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'SHARED',
+        target: 'ENEMY_SINGLE', exhaust: true,
+        // Excellent in a pack, dead against a boss — exactly the tension a neutral
+        // rare should carry. dealDamage sets alive=false before returning, so the
+        // kill check reads true on the same call.
+        desc: (up) => `Deal ${up ? 14 : 10} damage. If this kills the target, gain 2 energy and draw 2. Exhaust.`,
+        custom: (game, target, card) => {
+          dealDamage(game, game.combat.player, target, (card && card.upgraded) ? 14 : 10);
+          if (!target.alive) { game.combat.energy += 2; drawCards(game, 2); }
+        }
+      },
+
+      // --- Status cards ---
+      // Burn/Wound/Dazed analogues. The engine already supported these with no
+      // change: startCombat builds the piles from run.deck.map(c => ({...c})) and
+      // nothing ever writes a combat pile back, so a card injected mid-fight is
+      // temporary BY CONSTRUCTION. onEndTurnInHand, ethereal and retain are all
+      // already honoured by endPlayerTurn.
+      //
+      // CURSE + BASIC means cardPoolFor excludes them twice over, so they can
+      // never appear as a reward, in a shop, from a boon, or from an event.
+      'status-ash': {
+        id: 'status-ash', name: 'Ash', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true, ethereal: true,
+        desc: () => 'Unplayable. Ethereal — it exhausts itself at end of turn.'
+      },
+      'status-cinder': {
+        id: 'status-cinder', name: 'Cinder', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true,
+        // Worse than Decay's 2 on purpose: this is combat-scoped and arrives in pairs.
+        desc: () => 'Unplayable. At the end of your turn, lose 3 HP while in hand.',
+        onEndTurnInHand: (game) => { loseHp(game, 3, 'Cinder'); }
+      },
+      'status-slag': {
+        id: 'status-slag', name: 'Slag', cost: 1, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', exhaust: true,
+        // Playable, unlike the others: it costs you a whole energy to be rid of it.
+        desc: () => 'Pay 1 energy to exhaust this. Does nothing else.',
+        custom: () => {}
+      },
+      'status-rust': {
+        id: 'status-rust', name: 'Rusted Gear', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true, retain: true,
+        // The nastiest of the four: Retain means endPlayerTurn's `kept` array
+        // holds it forever, so it is a permanent -1 hand size for the fight.
+        desc: () => 'Unplayable. Retain — it never leaves your hand this combat.'
+      },
+
       'curse-doubt': {
         id: 'curse-doubt', name: 'Doubt', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
         target: 'SELF', unplayable: true,
@@ -3354,7 +3665,7 @@
       },
       {
         id: 'technique', label: 'Stolen Technique', desc: 'Add a random rare card of your class to your deck.',
-        apply: (game) => { grantRandomCard(game, CARD_RARITIES.RARE); }
+        apply: (game) => { grantRandomCard(game, CARD_RARITIES.RARE, { includeShared: false }); }
       },
       {
         id: 'purse', label: 'Debtor’s Purse', desc: 'Gain 120 gold. Add a Doubt curse to your deck.',
@@ -3545,8 +3856,13 @@
       });
     }
 
-    function grantRandomCard(game, rarity) {
-      const pool = cardPoolFor(game, { rarity });
+    // opts.includeShared: false restricts the grant to the run's own class.
+    // Needed from Phase 10 on: cardPoolFor defaults to including SHARED, and
+    // there are now SHARED rares, so a caller that PROMISES a class card ("Add a
+    // random rare card of your class") would otherwise be able to hand out a
+    // neutral one. Accidentally correct before, when SHARED had no rares.
+    function grantRandomCard(game, rarity, opts) {
+      const pool = cardPoolFor(game, { rarity, ...(opts || {}) });
       if (!pool.length) return null;
       const card = pickOne(pool);
       game.run.deck.push({ uid: uid(), defId: card.id, upgraded: false });
@@ -4583,6 +4899,16 @@
       // Relic hooks reacting to a card being played (War Drums, Pen Nib, ...).
       fireRelicHook(game, 'onCardPlayed', card, cardDef);
 
+      // ...and the POWER equivalent. firePowerHook has always been generic, but
+      // the engine only ever called it with onTurnStart / onDamageTaken /
+      // onEnemyKilled, so play-triggered powers were impossible to write. One
+      // line to an existing dispatcher, not a new hook system.
+      //
+      // Deliberately AFTER the Echo Loop block: firing inside the replay would
+      // make an echoed card trigger twice, so Ordnance Rack would silently do
+      // double duty on the first card each turn.
+      firePowerHook(game, 'onCardPlayed', { card, def: cardDef });
+
       // Move card
       game.combat.hand.splice(cardIdx, 1);
       if (cardDef.type === CARD_TYPES.POWER) {
@@ -4626,8 +4952,20 @@
         } else if (effect.type === 'HEAL') {
           game.run.hp = Math.min(game.run.maxHp, game.run.hp + effect.value);
         } else if (effect.type === 'APPLY_STATUS') {
-          if (target) {
-            const base = effect.key != null ? values[effect.key] : effect.value;
+          // Fans out on ENEMY_ALL, mirroring the DAMAGE branch above.
+          //
+          // It did not, and playCard() leaves `target` null for ENEMY_ALL cards,
+          // so this branch simply never ran for them. Toxic Cloud — a 2-cost
+          // uncommon whose ONLY effect is APPLY_STATUS on ENEMY_ALL, with no
+          // custom() fallback — did literally nothing at all. Immolate and Spore
+          // Burst dealt their damage and applied zero of their Blight. All three
+          // belong to Plague Seer, whose entire identity is stacking Blight.
+          const base = effect.key != null ? values[effect.key] : effect.value;
+          if (cardDef.target === 'ENEMY_ALL') {
+            for (const enemy of game.combat.enemies.filter(e => e.alive)) {
+              applyPlayerStatus(game, enemy, effect.status, base);
+            }
+          } else if (target) {
             applyPlayerStatus(game, target, effect.status, base);
           }
         } else if (effect.type === 'APPLY_SELF_STATUS') {
@@ -4734,9 +5072,31 @@
           break;
         }
         case 'ADD_CURSE': {
+          // Honours `value` and an optional `pile`. It used to push exactly one
+          // card into the discard pile regardless of what the intent declared —
+          // invisible while both users happened to declare value: 1, but it is
+          // what makes the status-card tier possible.
           const cardId = intent.cardId || 'curse-doubt';
-          game.combat.discardPile.push({ uid: uid(), defId: cardId, upgraded: false });
-          combatLog(game, 'foe', 'status', `${enemy.name} added ${CARDS_DB[cardId].name} to your discard pile.`);
+          const def = CARDS_DB[cardId];
+          if (!def) break;
+          const count = Math.max(1, intent.value || 1);
+          const pile = intent.pile || 'discard';
+          for (let i = 0; i < count; i++) {
+            const inst = { uid: uid(), defId: cardId, upgraded: false };
+            if (pile === 'draw') {
+              // Shuffled in, not stacked on top: landing three Cinders as your
+              // next three draws is a different (and much worse) card than one
+              // that pollutes the pile.
+              const d = game.combat.drawPile;
+              d.splice(Math.floor(rand() * (d.length + 1)), 0, inst);
+            } else if (pile === 'hand' && game.combat.hand.length < LAYOUT.HAND_SIZE) {
+              game.combat.hand.push(inst);
+            } else {
+              game.combat.discardPile.push(inst);
+            }
+          }
+          combatLog(game, 'foe', 'status',
+            `${enemy.name} added ${count > 1 ? count + '× ' : ''}${def.name} to your ${pile} pile.`);
           break;
         }
         case 'SUMMON': {
@@ -4744,6 +5104,14 @@
           combatLog(game, 'foe', 'status', `${enemy.name} summoned help!`);
           break;
         }
+        default:
+          // An unparseable intent token used to fall through here silently: the
+          // enemy skipped its turn showing "Unknown" and nothing anywhere said
+          // so. Now it reports through the Phase 2 error path, which the gate
+          // reads, so a typo in a getIntent literal fails the build.
+          logError('executeIntent', new Error(
+            `Enemy ${enemy.defId} has an unhandled intent type: ${intent && intent.type}`));
+          break;
       }
     }
 
@@ -4829,12 +5197,6 @@
       // hooks like Vital Ember) so the reward banner reports the true total.
       const maxHpGained = game.run.maxHp - maxHpBefore;
 
-      if (isBoss) {
-        recordRunResult(game, true);
-        goTo(SCREENS.VICTORY);
-        return;
-      }
-
       // Build a reward bundle: gold (already granted) + maybe a potion + a card choice.
       let potionId = null;
       const potionSlotFree = game.run.potions.some(p => p === null);
@@ -4853,6 +5215,16 @@
         isElite,
         isBoss
       };
+
+      // Bosses pay out too. The isBoss branch used to sit ABOVE this block and
+      // return straight to VICTORY, so killing a boss gave gold and nothing
+      // else — and BOSS_RARITY_WEIGHTS, a 25%-rare table written specifically
+      // for this moment, had never once been consulted. It matters more now
+      // that Victory offers a real descent into Act II rather than just ending.
+      // recordRunResult still fires here, so the win is banked before the
+      // player picks; leaving the card screen goes to Victory, not the map.
+      if (isBoss) recordRunResult(game, true);
+
       goTo(SCREENS.CARD_REWARD);
     }
 
@@ -5304,10 +5676,13 @@
       if (cardDef) {
         game.run.deck.push({ uid: uid(), defId: cardDef.id, upgraded: false });
       }
+      // Read before clearing: a boss reward leads to Victory, not back to a map
+      // whose boss node is already dead.
+      const wasBoss = !!(game.ui.combatReward && game.ui.combatReward.isBoss);
       game.ui.cardRewardChoices = null;
       game.ui.combatReward = null;
       // goTo() and the dispatch tail both save; a third write here was pure cost.
-      goTo(SCREENS.MAP);
+      goTo(wasBoss ? SCREENS.VICTORY : SCREENS.MAP);
     }
 
     function startNewRun(opts) {
@@ -7645,7 +8020,7 @@
     function validateContent() {
       const warnings = [];
       const knownTargets = ['SELF', 'ENEMY_SINGLE', 'ENEMY_ALL'];
-      const knownCardFields = ['id', 'name', 'cost', 'type', 'rarity', 'target', 'values', 'upgradedValues', 'effects', 'custom', 'desc', 'exhaust', 'unplayable', 'ethereal', 'retain', 'innate', 'onEndTurnInHand', 'character', 'onTurnStart', 'onDamageTaken', 'onEnemyKilled', 'hpCost'];
+      const knownCardFields = ['id', 'name', 'cost', 'type', 'rarity', 'target', 'values', 'upgradedValues', 'effects', 'custom', 'desc', 'exhaust', 'unplayable', 'ethereal', 'retain', 'innate', 'onEndTurnInHand', 'character', 'onTurnStart', 'onDamageTaken', 'onEnemyKilled', 'onCardPlayed', 'hpCost'];
       const validCharacters = Object.keys(CHARACTERS_DB).concat(['SHARED']);
       for (const [id, card] of Object.entries(CARDS_DB)) {
         if (id !== card.id) warnings.push(`Card key/id mismatch: ${id}`);
