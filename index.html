@@ -2156,14 +2156,45 @@
     const RARITY_WEIGHTS = { COMMON: 0.6, UNCOMMON: 0.3, RARE: 0.1 };
     const ELITE_RARITY_WEIGHTS = { COMMON: 0.45, UNCOMMON: 0.35, RARE: 0.20 };
     const BOSS_RARITY_WEIGHTS = { COMMON: 0.35, UNCOMMON: 0.40, RARE: 0.25 };
+    // Every potion has declared a `rarity` since they were written and NOTHING
+    // read it: both roll sites picked uniformly from Object.keys(POTIONS_DB), so
+    // Overcharge Vial — the run-winning 2-energy burst — was exactly as likely as
+    // a 5 HP heal. Flatter than the card table because a potion is one use, not a
+    // permanent deck slot.
+    const POTION_RARITY_WEIGHTS = { COMMON: 0.55, UNCOMMON: 0.34, RARE: 0.11 };
+    // How many of BOONS_DB the opening screen offers. The screen used to render
+    // the whole table, so growing the table was the only way to change the offer
+    // and doing so would have shown every boon at once.
+    const BOON_OFFER_SIZE = 4;
     const DEV_TOOLS = true;
 
+    // Each level is implemented in exactly ONE place. Levels that change a number
+    // read during play keep an `ascension >= N` test at the site they affect
+    // (findable with one grep); levels that shape the run before it starts
+    // declare an applyOnRunStart here, so the bootstrap does not accumulate a
+    // pile of magic numbers — `ascension >= 5` for the Doubt curse was already
+    // the third one written out by hand.
+    //
+    // The gate walks every level and asserts it is observably different from the
+    // level below it, because a level added here with no implementation anywhere
+    // is silent: ASCENSION_MAX is derived, so the menu offers it regardless.
     const ASCENSIONS = [
       { level: 1, name: 'Hardened Foes', desc: 'Enemies have 10% more HP.' },
       { level: 2, name: 'Dangerous Paths', desc: 'Elites appear more often on the map.' },
       { level: 3, name: 'Lean Spoils', desc: 'Combat gold rewards are reduced by 15%.' },
       { level: 4, name: 'Vault Tyrant', desc: 'Bosses have 25% more HP.' },
-      { level: 5, name: 'Dark Burden', desc: 'Start each run with a Doubt curse.' }
+      {
+        level: 5, name: 'Dark Burden', desc: 'Start each run with a Doubt curse.',
+        applyOnRunStart: (state) => { state.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false }); }
+      },
+      {
+        level: 6, name: 'Narrow Belt', desc: 'You carry two potions instead of three.',
+        applyOnRunStart: (state) => { state.run.potions = state.run.potions.slice(0, 2); }
+      },
+      { level: 7, name: 'Cold Embers', desc: 'Resting heals 20% of max HP instead of 30%.' },
+      { level: 8, name: 'Bare Shelves', desc: 'Shops stock three class cards instead of four.' },
+      { level: 9, name: 'Tainted Air', desc: 'Start every combat with 2 Blight.' },
+      { level: 10, name: 'Crowned in Ash', desc: 'Bosses begin each fight with 2 Might.' }
     ];
     // Derived, not a literal. The cap used to be a bare `5` in recordRunResult
     // and again in renderMenu, so adding a level meant finding both — and
@@ -2218,7 +2249,7 @@
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
-    // The 201-entry path-data map lives in assets/icons.js (generated, ~293KB).
+    // The 205-entry path-data map lives in assets/icons.js (generated, ~293KB).
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
@@ -2252,7 +2283,7 @@
       ADD_CURSE: 'Cursing your deck', SUMMON: 'Summoning help', UNKNOWN: 'Unknown'
     };
     const CARD_TYPE_ICONS = { ATTACK: 'type-attack', SKILL: 'type-skill', POWER: 'type-power', CURSE: 'type-curse' };
-    const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge' };
+    const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge', 'coin-purse': 'pot-coin-purse', 'whetting-oil': 'pot-whetting', 'marrow-tonic': 'pot-marrow', 'solvent': 'pot-solvent' };
     const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem' };
     const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil' };
     const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike' };
@@ -3709,6 +3740,41 @@
           game.combat.energy = Math.min(10, game.combat.energy + exhausted);
           combatLog(game, 'you', 'card', `Elixir of Purging exhausts ${exhausted} card${exhausted === 1 ? '' : 's'}.`);
         }
+      },
+
+      // --- Usable on the map ---
+      // Two of the fourteen above are usable outside combat, so for most of a run
+      // the belt is three slots of things you cannot touch. Everything else here
+      // reaches into game.combat — game.combat.player, game.combat.enemies — which
+      // is null on the map, so making them map-usable would not be a balance
+      // change, it would be a crash.
+      //
+      // These four touch game.run ONLY. That is the whole rule, and the gate
+      // enforces it by calling every usableOutOfCombat potion with combat nulled.
+      'coin-purse': {
+        id: 'coin-purse', name: 'Cutpurse Draught', rarity: 'COMMON', target: 'SELF', usableOutOfCombat: true,
+        desc: 'Gain 40 gold.',
+        custom: (game) => { game.run.gold += 40; }
+      },
+      'whetting-oil': {
+        id: 'whetting-oil', name: 'Whetting Oil', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true,
+        desc: 'Permanently upgrade a random card in your deck.',
+        custom: (game) => { upgradeRandomCard(game); }
+      },
+      'marrow-tonic': {
+        id: 'marrow-tonic', name: 'Marrow Tonic', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true,
+        desc: 'Gain 4 max HP and heal the same.',
+        custom: (game) => { gainMaxHp(game, 4, true); }
+      },
+      'solvent': {
+        id: 'solvent', name: 'Vault Solvent', rarity: 'RARE', target: 'SELF', usableOutOfCombat: true,
+        // The only repeatable curse removal in the game that is not a shop
+        // purchase on a rising price ladder.
+        desc: 'Remove one curse from your deck.',
+        custom: (game) => {
+          const idx = game.run.deck.findIndex(c => isCurseCardInstance(c));
+          if (idx !== -1) game.run.deck.splice(idx, 1);
+        }
       }
     };
 
@@ -3833,8 +3899,75 @@
       {
         id: 'clarity', label: 'Moment of Clarity', desc: 'Remove one card from your starting deck.',
         apply: (game) => { game.ui.picker = { purpose: 'boon' }; }
+      },
+      // renderBoon mapped over ALL of BOONS_DB, so these four were every opening
+      // choice of every run of every character, forever. The fix is not "more
+      // boons" — it is rolling a subset, which is what makes the count matter.
+      //
+      // `characters` is the same optional field RELICS_DB carries. Class-specific
+      // boons are the reason a Tinker opening and a Knight opening should not be
+      // drawn from one bucket.
+      {
+        id: 'field-kit', label: 'Field Kit', desc: 'Start with a Cutpurse Draught and a Vigor Tonic.',
+        apply: (game) => {
+          for (const pid of ['coin-purse', 'vigor']) {
+            const slot = game.run.potions.findIndex(p => p === null);
+            if (slot !== -1) game.run.potions[slot] = pid;
+          }
+        }
+      },
+      {
+        id: 'whetstone', label: 'Whetted Edge', desc: 'Upgrade two random cards in your starting deck.',
+        apply: (game) => { upgradeRandomCard(game); upgradeRandomCard(game); }
+      },
+      {
+        id: 'oath', label: 'Ashen Oath', desc: 'Gain a random relic. Lose 8 max HP.',
+        apply: (game) => {
+          const r = getRandomRelic(game);
+          if (r) grantRelic(game, r);
+          game.run.maxHp = Math.max(30, game.run.maxHp - 8);
+          game.run.hp = Math.min(game.run.hp, game.run.maxHp);
+        }
+      },
+      {
+        id: 'siege-drill', label: 'Siege Drill', desc: 'Add two Guards and one Slash to your deck.',
+        characters: ['cinder-knight'],
+        apply: (game) => {
+          for (const defId of ['guard', 'guard', 'slash']) {
+            game.run.deck.push({ uid: uid(), defId, upgraded: false });
+          }
+        }
+      },
+      {
+        id: 'first-culture', label: 'First Culture', desc: 'Add two Poison Darts to your deck.',
+        characters: ['plague-seer'],
+        apply: (game) => {
+          for (let i = 0; i < 2; i++) game.run.deck.push({ uid: uid(), defId: 'poison-dart', upgraded: false });
+        }
+      },
+      {
+        id: 'spare-parts', label: 'Spare Parts', desc: 'Add two Scouts to your deck.',
+        characters: ['vault-tinker'],
+        apply: (game) => {
+          for (let i = 0; i < 2; i++) game.run.deck.push({ uid: uid(), defId: 'scout', upgraded: false });
+        }
       }
     ];
+
+    // Boons available to a given character: unrestricted ones plus that class's.
+    function boonPoolFor(characterId) {
+      return BOONS_DB.filter(b => !b.characters || b.characters.includes(characterId));
+    }
+
+    // Roll the opening offer. Stored as IDS, not objects: BOONS_DB entries carry
+    // an apply() function, JSON drops functions, and STATE.ui goes into the save —
+    // so a reload on the boon screen would hand the handler a def it could not
+    // apply. The event system solves the identical problem the identical way
+    // (see rehydrateState's eventDef lookup).
+    function rollBoonChoices(game, count) {
+      const pool = shuffle(boonPoolFor(game.run.characterId).map(b => b.id));
+      return pool.slice(0, count || 4);
+    }
 
     const CHARACTERS_DB = {
       'cinder-knight': {
@@ -4023,6 +4156,30 @@
       const card = pickOne(pool);
       game.run.deck.push({ uid: uid(), defId: card.id, upgraded: false });
       return card.id;
+    }
+
+    // The one place a potion is chosen. Both callers — the post-combat drop and
+    // the shop — used to inline `pickOne(Object.keys(POTIONS_DB))`, which is why
+    // POTION_RARITY_WEIGHTS could be declared on all fourteen potions and read by
+    // none of them. `exclude` is a Set of ids already taken, so the shop cannot
+    // stock the same potion at two prices.
+    //
+    // Falls back a rarity at a time rather than giving up: a rarity band emptied
+    // by `exclude` must not silently mean "no potion".
+    function rollPotion(exclude) {
+      exclude = exclude || new Set();
+      const byRarity = {};
+      for (const p of Object.values(POTIONS_DB)) {
+        if (exclude.has(p.id)) continue;
+        (byRarity[p.rarity] = byRarity[p.rarity] || []).push(p.id);
+      }
+      const weights = {};
+      for (const [rarity, w] of Object.entries(POTION_RARITY_WEIGHTS)) {
+        if ((byRarity[rarity] || []).length) weights[rarity] = w;
+      }
+      const available = Object.keys(weights);
+      if (!available.length) return null;
+      return pickOne(byRarity[weightedPick(weights)]);
     }
 
     function isCurseCardInstance(card) {
@@ -4968,7 +5125,9 @@
           hp: scaledMaxHp,
           maxHp: scaledMaxHp,
           block: 0,
-          statuses: {},
+          // A10 Crowned in Ash: a boss that opens with Might turns every number
+          // on its intent list up, including the ones it has not shown you yet.
+          statuses: (template.isBoss && game.ascension >= 10) ? { might: 2 } : {},
           intent: null,
           alive: true,
           intentIndex: 0,
@@ -4989,7 +5148,8 @@
 
       game.combat = {
         enemies,
-        player: { block: 0, statuses: {} },
+        // A9 Tainted Air: you open every fight already ticking.
+        player: { block: 0, statuses: game.ascension >= 9 ? { blight: 2 } : {} },
         energy: energyMax,
         energyMax,
         drawPile,
@@ -5462,8 +5622,11 @@
       const potionSlotFree = game.run.potions.some(p => p === null);
       if (eventReward && eventReward.potionId) {
         potionId = eventReward.potionId;
-      } else if (potionSlotFree && rand() < 0.30) {
-        potionId = pickOne(Object.keys(POTIONS_DB));
+      } else if (potionSlotFree && rand() < (isElite ? 0.55 : 0.28)) {
+        // A flat 30% regardless of what you just killed meant the belt filled at
+        // the same rate whether you took the elite or walked past it. Elites are
+        // the risk you choose; this is part of what they pay.
+        potionId = rollPotion();
       }
       game.ui.combatReward = {
         gold,
@@ -5718,7 +5881,7 @@
       if (choice === 'rest') {
         // Relics can lock the campfire heal off in exchange for raw power.
         if (anyRelic(game, r => r.blocksRest)) return;
-        const heal = Math.floor(game.run.maxHp * 0.3);
+        const heal = Math.floor(game.run.maxHp * (game.ascension >= 7 ? 0.20 : 0.30));   // A7 Cold Embers
         healRun(game, heal, 'Rest');
         triggerRestRelics();
         goTo(SCREENS.MAP);
@@ -5801,8 +5964,9 @@
       const picked = new Set();
       const priceFor = (rarity) => ({ COMMON: 55, UNCOMMON: 85, RARE: 140 }[rarity] + Math.floor((rand() - 0.5) * 20));
       // Four class-card slots...
+      const classSlots = game.ascension >= 8 ? 3 : 4;   // A8 Bare Shelves
       let guard = 0;
-      while (cards.length < 4 && guard++ < 50) {
+      while (cards.length < classSlots && guard++ < 50) {
         const rarity = weightedPick(RARITY_WEIGHTS);
         const cardPool = cardPoolFor(game, { rarity, exclude: picked, includeShared: false });
         if (cardPool.length > 0) {
@@ -5837,11 +6001,17 @@
 
     function generateShopPotions() {
       const potions = [];
+      const picked = new Set();
       const count = 1 + Math.floor(rand() * 2);
       for (let i = 0; i < count; i++) {
-        const potion = Object.values(POTIONS_DB)[Math.floor(rand() * Object.values(POTIONS_DB).length)];
-        const price = 40 + Math.floor(rand() * 20);
-        potions.push({ id: potion.id, name: potion.name, price });
+        // generateShopCards keeps a `picked` Set and generateShopRelics a `picked`
+        // array; this one kept nothing, so a two-potion shop could stock the same
+        // potion twice at two different prices. rollPotion's exclude fixes that and
+        // the rarity blindness in the same call.
+        const id = rollPotion(picked);
+        if (!id) break;
+        picked.add(id);
+        potions.push({ id, name: POTIONS_DB[id].name, price: 40 + Math.floor(rand() * 20) });
       }
       return potions;
     }
@@ -5967,7 +6137,11 @@
         ascension: opts.ascension || 0,
         act: 1
       };
-      if (STATE.ascension >= 5) STATE.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false });
+      // One loop instead of one hand-written `ascension >= N` per level. Every
+      // ascension at or below the chosen one applies, in order.
+      for (const a of ASCENSIONS) {
+        if (a.level <= STATE.ascension && typeof a.applyOnRunStart === 'function') a.applyOnRunStart(STATE);
+      }
       // Choose the boss up front so the player can plan around it. Act 1's pool
       // is Bonelord + Arch-Lich; the Ashen Warden and the Hollow Choir are Act 2's
       // and cannot be drawn here at all.
@@ -6362,16 +6536,28 @@
     }
 
     function renderBoon() {
+      // Rolled once and remembered, so a re-render (or a reload) does not reshuffle
+      // the offer out from under a player mid-decision.
+      if (!STATE.ui.boonChoices || !STATE.ui.boonChoices.length) {
+        STATE.ui.boonChoices = rollBoonChoices(STATE, BOON_OFFER_SIZE);
+      }
+      let offered = STATE.ui.boonChoices.map(id => BOONS_DB.find(b => b.id === id)).filter(Boolean);
+      // A save written before a boon was renamed or removed would otherwise offer
+      // fewer choices, or none at all, with no way off the screen.
+      if (!offered.length) {
+        STATE.ui.boonChoices = rollBoonChoices(STATE, BOON_OFFER_SIZE);
+        offered = STATE.ui.boonChoices.map(id => BOONS_DB.find(b => b.id === id)).filter(Boolean);
+      }
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel">
             <h2 class="panel-title">${icon('t-event','icon-title')} Before the Descent ${icon('t-event','icon-title')}</h2>
             <div class="panel-content">
               <div class="panel-text">
-                A figure waits at the vault mouth with four offerings for
+                A figure waits at the vault mouth with ${offered.length} offerings for
                 ${STATE.run.characterName || 'you'}. Take exactly one.
               </div>
-              ${BOONS_DB.map(boon => `
+              ${offered.map(boon => `
                 <button class="choice-button" data-action="chooseBoon" data-boonid="${boon.id}">
                   <span class="choice-label">${boon.label}</span>
                   <span class="choice-desc">${boon.desc}</span>
@@ -7338,7 +7524,9 @@
         result.gold = 40;
         const slot = game.run.potions.findIndex(p => p === null);
         if (slot !== -1) {
-          result.potionId = pickOne(Object.keys(POTIONS_DB));
+          // The third roll site, and the one the plan for this phase missed:
+          // the Quartermaster's Crate rolled uniformly too.
+          result.potionId = rollPotion();
           game.run.potions[slot] = result.potionId;
         } else {
           result.potionFull = true;
@@ -8446,7 +8634,9 @@
       startNewRun({ seed: seed || 1, characterId: opts.characterId || 'cinder-knight', ascension: opts.ascension || 0 });
       // Take a boon so the bot exercises the same run shape a player gets. The
       // card-picker boon is skipped — it needs UI state the bot doesn't drive.
-      const botBoon = pickOne(BOONS_DB.filter(b => b.id !== 'clarity'));
+      // boonPoolFor, not BOONS_DB: class-restricted boons exist now, and handing
+      // a Knight the Tinker's opener would measure a run no player can have.
+      const botBoon = pickOne(boonPoolFor(STATE.run.characterId).filter(b => b.id !== 'clarity'));
       botBoon.apply(STATE);
       goTo(SCREENS.MAP);
       let steps = 0;
