@@ -1571,7 +1571,11 @@
       font-size: var(--fs-md);
     }
 
-    /* Floating combat numbers (fire-and-forget overlay) */
+    /* Floating combat numbers (fire-and-forget overlay).
+       Lives inside #fx-layer now, so this z-index competes only with .fx-sprite
+       (which sets none) rather than with the layer itself. It used to be
+       appended to document.body at z-index 1000 against the layer's 9999, so the
+       attack burst drew OVER the damage number it was meant to accompany. */
     .floating-number {
       position: fixed;
       transform: translate(-50%, -50%);
@@ -1586,12 +1590,42 @@
 
     .floating-number.floating-dmg { color: var(--color-danger); }
     .floating-number.floating-block { color: var(--color-block); }
+    .floating-number.floating-heal { color: var(--color-heal); }
 
     @keyframes float-up {
       0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
       15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
       100% { opacity: 0; transform: translate(-50%, -120%) scale(1); }
     }
+
+    /* === Impact === */
+    /* Nothing in this game shook, flashed or recoiled: taking 30 damage looked
+       exactly like taking 3, plus a different numeral. Both animations are
+       transform/filter only, so they composite rather than repaint, and both are
+       neutered by the reduced-motion rules further down. */
+    @keyframes shake-light {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-3px, 1px); }
+      50% { transform: translate(3px, -1px); }
+      75% { transform: translate(-2px, 0); }
+    }
+    @keyframes shake-heavy {
+      0%, 100% { transform: translate(0, 0); }
+      15% { transform: translate(-7px, 2px); }
+      30% { transform: translate(7px, -3px); }
+      45% { transform: translate(-6px, 1px); }
+      60% { transform: translate(5px, 2px); }
+      80% { transform: translate(-3px, -1px); }
+    }
+    #app.shake-light { animation: shake-light 0.22s ease-in-out; }
+    #app.shake-heavy { animation: shake-heavy 0.38s ease-in-out; }
+
+    @keyframes hit-flash {
+      0% { filter: brightness(1); }
+      30% { filter: brightness(1.9) saturate(0.4); }
+      100% { filter: brightness(1); }
+    }
+    .hit-flash { animation: hit-flash 0.26s ease-out; }
 
     .disabled-choice, .disabled-choice:hover {
       opacity: 0.45;
@@ -3242,7 +3276,13 @@
       const before = game.run.hp;
       game.run.hp = Math.min(game.run.maxHp, game.run.hp + amount);
       const healed = game.run.hp - before;
-      if (healed > 0 && game.combat && game.combat.log) combatLog(game, 'you', 'heal', `${source || 'Healing'} restores ${healed} HP.`);
+      if (healed > 0 && game.combat && game.combat.log) {
+        combatLog(game, 'you', 'heal', `${source || 'Healing'} restores ${healed} HP.`);
+        // Also the first thing that ever plays assets/audio/sfx/heal.mp3, which
+        // shipped with zero call sites: rest sites, First Aid, Mending ticks and
+        // Leech Life were all silent. spawnFloatingNumber owns the sound.
+        spawnFloatingNumber('player', `+${healed}`, 'heal');
+      }
       return healed;
     }
 
@@ -3613,6 +3653,11 @@
       const entry = { t: game.combat.turnNum || 1, side, kind, text };
       if (opts && opts.minor) entry.minor = true;
       if (opts && opts.snap) entry.snap = opts.snap;
+      // Structured damage, so the turn-header summary can add up what happened
+      // instead of regex-scraping the numbers back out of the prose it just
+      // formatted. The old form did `text.match(/dealt (\d+)/)`, which meant
+      // rewording a log line silently made the summary read zero.
+      if (opts && opts.dmg != null) entry.dmg = opts.dmg;
       game.combat.log.push(entry);
       const over = game.combat.log.length - LOG_CAP;
       if (over > 0) game.combat.log.splice(0, over);
@@ -3647,22 +3692,91 @@
     // --- Fire-and-forget floating combat numbers (Phase 1.7) ---
     // Appends a transient element over the target's panel, outside the
     // full-rerender cycle, and removes itself when the animation ends.
+    // Fan-out counter for numbers that land in the same frame. Module-level
+    // rather than per-call, because the whole point is that separate calls from
+    // one synchronous enemy turn need to know about each other.
+    let _floatFanout = 0, _floatFanoutReset = null;
+
     function spawnFloatingNumber(targetKey, text, kind) {
-      // Audio cue: block gains vs damage impacts.
-      AudioEngine.sfx(kind === 'block' ? 'block' : 'hit');
+      // Audio cue per kind. 'heal' was added in Phase 6 — heal.mp3 shipped with
+      // no call site at all, so healing had been silent since it was recorded.
+      AudioEngine.sfx(kind === 'block' ? 'block' : kind === 'heal' ? 'heal' : 'hit');
       // Deferred so it runs after render() repaints the DOM for this action.
       setTimeout(() => {
         const rect = anchorRect(targetKey);
         if (!rect) return;
         const el = document.createElement('div');
-        el.className = 'floating-number ' + (kind === 'block' ? 'floating-block' : 'floating-dmg');
+        el.className = 'floating-number ' + (kind === 'block' ? 'floating-block' : kind === 'heal' ? 'floating-heal' : 'floating-dmg');
         el.textContent = text;
-        el.style.left = (rect.left + rect.width / 2) + 'px';
-        el.style.top = (rect.top + rect.height / 3) + 'px';
-        document.body.appendChild(el);
+
+        // Fan out. runEnemyTurn resolves every enemy in one synchronous pass and
+        // every call computed the SAME position (the anchor's centre, upper
+        // third), so three attackers stacked three numbers on one pixel: you saw
+        // one figure and could not tell who hit you for what. Multi-hit cards and
+        // ENEMY_ALL had the same problem. The counter resets once the frame
+        // drains, so a normal single hit is still dead centre.
+        const step = _floatFanout++;
+        if (_floatFanoutReset == null) {
+          _floatFanoutReset = setTimeout(() => { _floatFanout = 0; _floatFanoutReset = null; }, 250);
+        }
+        // Alternate left/right of centre so a pair reads symmetrically.
+        const spread = step === 0 ? 0 : (step % 2 ? 1 : -1) * Math.ceil(step / 2) * 34;
+        el.style.left = (rect.left + rect.width / 2 + spread) + 'px';
+        el.style.top = (rect.top + rect.height / 3 - step * 6) + 'px';
+        // Stagger, so simultaneous numbers arrive as a burst you can read rather
+        // than all at once. Purely visual; the engine stays synchronous.
+        el.style.animationDelay = (step * 70) + 'ms';
+
+        // Into #fx-layer, not document.body. The layer is z-index 9999 and the
+        // number used to be 1000 on the body, so the attack sprite drew OVER the
+        // damage number it was meant to accompany.
+        fxLayer().appendChild(el);
         el.addEventListener('animationend', () => el.remove());
-        setTimeout(() => el.remove(), 1200);
+        // Backstop, and load-bearing: the reduced-motion rules set
+        // `animation: none`, so animationend never fires and this is the only
+        // thing that removes the element.
+        setTimeout(() => el.remove(), 1400 + step * 70);
       }, 0);
+    }
+
+    // Shared, because playEffect used to create its own if missing and
+    // spawnFloatingNumber appended to document.body instead.
+    function fxLayer() {
+      let layer = document.getElementById('fx-layer');
+      if (!layer) { layer = document.createElement('div'); layer.id = 'fx-layer'; document.body.appendChild(layer); }
+      return layer;
+    }
+
+    // Impact feedback. Nothing in the game shook, flashed or recoiled: taking 30
+    // damage looked exactly like taking 3, plus a different numeral.
+    function shakeScreen(strength) {
+      if (prefersReducedMotion()) return;
+      const app = document.getElementById('app');
+      if (!app) return;
+      app.classList.remove('shake-light', 'shake-heavy');
+      // Force a reflow so re-adding the class restarts the animation on a
+      // back-to-back hit instead of being a no-op.
+      void app.offsetWidth;
+      app.classList.add(strength >= 12 ? 'shake-heavy' : 'shake-light');
+      setTimeout(() => app.classList.remove('shake-light', 'shake-heavy'), 400);
+    }
+
+    function flashTarget(targetKey) {
+      if (prefersReducedMotion()) return;
+      setTimeout(() => {
+        const sel = targetKey === 'player' ? '.player-panel' : `.enemy-panel[data-enemyuid="${targetKey}"]`;
+        const el = document.querySelector(sel);
+        if (!el) return;
+        el.classList.remove('hit-flash');
+        void el.offsetWidth;
+        el.classList.add('hit-flash');
+        setTimeout(() => el.classList.remove('hit-flash'), 260);
+      }, 0);
+    }
+
+    function prefersReducedMotion() {
+      if (document.body && document.body.classList.contains('reduced-motion')) return true;
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     }
 
     // --- Fire-and-forget pixel-art combat effect sprites ---
@@ -3683,8 +3797,7 @@
         const cx = rect.left + rect.width / 2;
         // Anchor to the upper third, aligning with where floating damage/block numbers pop.
         const cy = rect.top + rect.height / 3;
-        let layer = document.getElementById('fx-layer');
-        if (!layer) { layer = document.createElement('div'); layer.id = 'fx-layer'; document.body.appendChild(layer); }
+        const layer = fxLayer();
         const img = document.createElement('img');
         img.className = 'fx-sprite';
         img.alt = '';
@@ -4571,8 +4684,17 @@
         }
       }
 
-      combatLog(game, sourceIsPlayer ? 'you' : 'foe', 'attack', `${sourceIsPlayer ? 'You' : (source.name || 'Enemy')} dealt ${hpDamage} damage${blocked > 0 ? ` (${blocked} blocked)` : ''}${isPlayerTarget ? ' to you' : ' to ' + target.name}.`);
-      spawnFloatingNumber(isPlayerTarget ? 'player' : target.uid, hpDamage > 0 ? `-${hpDamage}` : (blocked > 0 ? 'blocked' : '0'), hpDamage > 0 ? 'dmg' : 'block');
+      combatLog(game, sourceIsPlayer ? 'you' : 'foe', 'attack', `${sourceIsPlayer ? 'You' : (source.name || 'Enemy')} dealt ${hpDamage} damage${blocked > 0 ? ` (${blocked} blocked)` : ''}${isPlayerTarget ? ' to you' : ' to ' + target.name}.`, { dmg: hpDamage });
+      // A shield glyph, not the seven-character word "blocked" in --fs-xl mono:
+      // it reads at a glance, which is the whole job of a floating number.
+      const floatText = hpDamage > 0 ? `-${hpDamage}` : (blocked > 0 ? '⛊' : '0');
+      spawnFloatingNumber(isPlayerTarget ? 'player' : target.uid, floatText, hpDamage > 0 ? 'dmg' : 'block');
+      if (hpDamage > 0) {
+        flashTarget(isPlayerTarget ? 'player' : target.uid);
+        // Only the player's own pain shakes the screen. Shaking on every hit the
+        // player lands would make a normal turn a strobe.
+        if (isPlayerTarget) shakeScreen(hpDamage);
+      }
       if (hpDamage > 0 && !isPlayerTarget) playEffect(target.uid, 'attack');  // fiery burst on the struck enemy
 
       if (isPlayerTarget) {
@@ -4961,7 +5083,7 @@
         defeat:  BASE + 'music/defeat.'  + MUSIC_EXT,
       };
       const SFX_FILES = {
-        click:  BASE + 'sfx/click.wav',
+        click:  BASE + 'sfx/click.mp3',   // was the one untranscoded asset: 16KB of WAV, and the most-played sound in the game
         attack: BASE + 'sfx/attack.mp3',
         hit:    BASE + 'sfx/hit.mp3',
         block:  BASE + 'sfx/block.mp3',
@@ -5547,10 +5669,12 @@
       // Newest first: the interesting end of a fight is what just happened.
       const blocks = turns.slice().reverse().map(g => {
         const open = isTurnOpen(g.t, newest);
-        const dealt = g.entries.filter(e => e.side === 'you' && e.kind === 'attack')
-          .reduce((n, e) => n + (parseInt((e.text.match(/dealt (\d+)/) || [])[1], 10) || 0), 0);
-        const taken = g.entries.filter(e => e.side === 'foe' && e.kind === 'attack')
-          .reduce((n, e) => n + (parseInt((e.text.match(/dealt (\d+)/) || [])[1], 10) || 0), 0);
+        // e.dmg, not a regex over e.text. Entries from a pre-Phase-6 save have
+        // no dmg field, so they fall back to the scrape rather than reading 0 —
+        // migrateSave cannot backfill it, the number is only in the prose.
+        const damageIn = (e) => e.dmg != null ? e.dmg : (parseInt((e.text.match(/dealt (\d+)/) || [])[1], 10) || 0);
+        const dealt = g.entries.filter(e => e.side === 'you' && e.kind === 'attack').reduce((n, e) => n + damageIn(e), 0);
+        const taken = g.entries.filter(e => e.side === 'foe' && e.kind === 'attack').reduce((n, e) => n + damageIn(e), 0);
         const summary = [
           g.snap ? `HP ${g.snap.hp}/${g.snap.maxHp}` : '',
           dealt ? `dealt ${dealt}` : '',
