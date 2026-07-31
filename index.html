@@ -240,7 +240,10 @@
 
     .menu-subtitle {
       color: var(--text-muted);
-      margin-bottom: 30px;
+      /* 30px -> 20px. The menu fits the 1000x660 minimum with almost nothing
+         spare, and the seed row added a line; this decorative gap is where the
+         room came from, rather than letting the menu become a scroller. */
+      margin-bottom: 20px;
     }
 
     .menu-button {
@@ -654,6 +657,94 @@
     }
 
     .error-actions { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    /* Confirm gate. Below the error banner (80) because an error reports on
+       state a confirm might be about to act on, above everything else. */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 75;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: rgba(0, 0, 0, 0.55);
+    }
+    .confirm-panel {
+      max-width: min(30rem, 100%);
+      padding: 1.75rem 2rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-panel);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+    .confirm-title { font-size: var(--fs-lg); margin: 0 0 0.75rem; font-weight: normal; }
+    .confirm-body { font-size: var(--fs-base); margin-bottom: 1.25rem; color: var(--text-primary); }
+    .confirm-actions { display: flex; gap: 0.75rem; }
+    .confirm-actions .choice-button { flex: 1 1 0; }
+
+    /* Run history. Reference material, so it sits under the confirm gate. */
+    .history-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 72;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .history-panel {
+      display: flex;
+      flex-direction: column;
+      width: min(64rem, 100%);
+      max-height: 100%;
+      padding: 1.5rem 1.75rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-panel);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+    .history-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 1rem; }
+    /* The table is the one thing here allowed to scroll sideways; the page
+       itself must never (html/body are overflow:hidden). */
+    .history-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .history-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .history-table th, .history-table td {
+      padding: 0.35rem 0.6rem;
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .history-table th { color: var(--text-muted); font-weight: normal; }
+    .history-table tr.run-win td:first-child { color: var(--color-heal); }
+    .history-table tr.run-loss td:first-child { color: var(--color-danger); }
+    .history-table tr.run-abandoned td:first-child { color: var(--text-muted); }
+    .history-open { margin-top: 0.5rem; }
+
+    /* Seed entry on the menu, and the seed readout on the end screens. */
+    /* Margins deliberately tight: the menu fits the 1000x660 minimum window with
+       almost nothing to spare, and the first draft of this row put it 12px over,
+       turning the menu into a scroller at the smallest supported size. */
+    .seed-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      margin: 0.25rem 0 0;
+      flex-wrap: wrap;
+    }
+    .seed-label { color: var(--text-muted); font-size: var(--fs-sm); }
+    .seed-input {
+      font: inherit;
+      font-size: var(--fs-sm);
+      padding: 0.3rem 0.5rem;
+      width: 15rem;
+      max-width: 100%;
+      color: var(--text-primary);
+      background: var(--bg-dark);
+      border: 2px solid var(--border-color);
+    }
+    .run-seed-line { color: var(--text-muted); font-size: var(--fs-sm); margin-bottom: 0.75rem; }
+    .run-seed-line code { font-family: inherit; color: var(--text-primary); }
 
     /* Painted only when renderScreen() itself throws, so it uses no tokens that
        a broken render could have been mid-way through changing. */
@@ -1981,6 +2072,10 @@
       { level: 4, name: 'Vault Tyrant', desc: 'Bosses have 25% more HP.' },
       { level: 5, name: 'Dark Burden', desc: 'Start each run with a Doubt curse.' }
     ];
+    // Derived, not a literal. The cap used to be a bare `5` in recordRunResult
+    // and again in renderMenu, so adding a level meant finding both — and
+    // missing one silently caps unlocks below the content that exists.
+    const ASCENSION_MAX = ASCENSIONS.length;
 
     const STATUS_INFO = {
       might: { label: 'Might', short: 'M', desc: 'Increases damage dealt.' },
@@ -3465,6 +3560,8 @@
       // banner in particular must not outlive the session that produced it.
       game.ui.keyHelp = false;
       game.ui.error = null;
+      game.ui.confirm = null;    // a pending yes/no must not survive a reload
+      game.ui.history = false;
       game.act = game.act || 1;
       if (game.combat && game.combat.enemies) {
         for (const enemy of game.combat.enemies) enemy.template = ENEMIES_DB[enemy.defId];
@@ -3616,7 +3713,7 @@
         if (won) meta.wins++; else meta.losses++;
         meta.bestFloor = Math.max(meta.bestFloor || 0, game.run.floor || 0);
         meta.bestGold = Math.max(meta.bestGold || 0, game.run.gold || 0);
-        if (won) meta.highestAscensionUnlocked = Math.min(5, Math.max(meta.highestAscensionUnlocked || 0, (game.ascension || 0) + 1));
+        if (won) meta.highestAscensionUnlocked = Math.min(ASCENSION_MAX, Math.max(meta.highestAscensionUnlocked || 0, (game.ascension || 0) + 1));
         meta.runs = meta.runs || [];
         meta.runs.unshift({
           won,
@@ -3629,7 +3726,11 @@
           relics: game.run.relics ? game.run.relics.length : 0,
           ascension: game.ascension || 0,
           act: game.act || 1,
-          seed: game.seed
+          seed: game.seed,
+          // Distinguishes "walked away" from "died" in the history. meta.runs is
+          // unversioned (loadMeta spreads over defaults), so adding a field here
+          // needs no save migration.
+          abandoned: !!game.run.abandoned
         });
         meta.runs = meta.runs.slice(0, 10);
         saveMeta(meta);
@@ -4984,6 +5085,29 @@
       refresh();
     }
 
+    // Back to the title screen from anywhere.
+    //
+    // There was no goTo(SCREENS.MENU) anywhere in this file. Once a run started
+    // you could not leave it: changing character or ascension meant reloading
+    // the page, and 'newRun' on the end screens reused STATE.run.characterId and
+    // STATE.ascension, so even after dying you were locked to the same pairing.
+    //
+    // STATE is rebuilt rather than mutated, so nothing from the finished run —
+    // a stale picker, a pending card, an event def — can survive into the menu.
+    function returnToMenu() {
+      STATE = { screen: SCREENS.MENU, run: null, combat: null, ui: {}, seed: null, ascension: 0 };
+      resetLogView();
+      refresh();
+    }
+
+    // Abandoning counts as a loss and burns the save, so it asks first. The
+    // confirm is generic (title/body/label + the action to dispatch on yes) so
+    // Phase 8's "clear save data" can reuse it rather than inventing a second.
+    function askConfirm(title, body, confirmLabel, action, danger) {
+      STATE.ui = STATE.ui || {};
+      STATE.ui.confirm = { title, body, confirmLabel, action, danger: !!danger };
+    }
+
     function generateCardReward(game) {
       const choices = [];
       const used = new Set();
@@ -5274,12 +5398,12 @@
       // of any screen, overlays included.
       let html = '';
       if (STATE.ui && STATE.ui.pileViewer) {
-        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+        app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + overlayHTML();
         restoreFocus(app, priorFocus);
         return;
       }
       if (STATE.ui && STATE.ui.picker) {
-        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+        app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + overlayHTML();
         restoreFocus(app, priorFocus);
         return;
       }
@@ -5320,7 +5444,7 @@
           break;
       }
 
-      app.innerHTML = statusBarHTML() + html + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+      app.innerHTML = statusBarHTML() + html + renderInspectPanel() + overlayHTML();
       restoreFocus(app, priorFocus);
       if (STATE.screen === SCREENS.MAP) requestAnimationFrame(scrollMapToFocus);
       AudioEngine.updateMusic(STATE);
@@ -5363,7 +5487,7 @@
       const meta = loadMeta();
       const saveButton = hasSave() ? '<button class="menu-button" data-action="continueRun">Continue Run</button>' : '';
       const ascMax = Math.max(0, meta.highestAscensionUnlocked || 0);
-      const shownAscensions = Array.from({ length: Math.min(ascMax, 5) + 1 }, (_, i) => i);
+      const shownAscensions = Array.from({ length: Math.min(ascMax, ASCENSION_MAX) + 1 }, (_, i) => i);
       const ascensionText = ASCENSIONS.slice(0, Math.max(0, ascMax)).map(a => `A${a.level}: ${a.name}`).join(' · ');
       const characterButtons = Object.values(CHARACTERS_DB).map(ch => `
         <div class="menu-character">
@@ -5375,14 +5499,21 @@
         </div>
       `).join('');
       const recent = (meta.runs || []).slice(0, 3).map(r => `<div class="stat-line"><span>${r.won ? 'Win' : 'Loss'} · ${r.character}</span><span>F${r.floor} · A${r.ascension || 0}</span></div>`).join('') || '<div class="stat-line"><span>No runs yet</span><span>—</span></div>';
+      const hasHistory = (meta.runs || []).length > 0;
       return `
         <div class="screen menu-screen">
           <div class="menu-panel">
             <h1 class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</h1>
-            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v6</div>
+            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v7</div>
             ${saveButton}
             <div class="menu-section-label">Start a new run</div>
             <div class="menu-characters">${characterButtons}</div>
+            <div class="seed-row">
+              <label class="seed-label" for="seed-input">Seed (optional)</label>
+              <input class="seed-input" id="seed-input" type="text" inputmode="numeric"
+                     placeholder="leave blank for random" value="${attrEscape(STATE.ui.seedInput || '')}"
+                     data-ititle="Run seed" data-ibody="Two runs with the same seed and character generate the same map, encounters and rewards. Copy one from Run History to replay it.">
+            </div>
             <div class="menu-stats">
               <div class="stats-box">
                 <div class="stat-line"><span>Wins / Losses:</span><span>${meta.wins || 0} / ${meta.losses || 0}</span></div>
@@ -5394,6 +5525,7 @@
               <div class="stats-box">
                 <div class="stats-box-label">Recent Runs</div>
                 ${recent}
+                ${hasHistory ? '<button class="inline-chip-button history-open" data-action="viewHistory">Full history</button>' : ''}
               </div>
             </div>
             <div class="menu-tagline">
@@ -5779,6 +5911,107 @@
       ['Esc', 'Dismiss a panel, close the deck, or cancel targeting'],
       ['?', 'Show or hide this list'],
     ];
+
+    // The layered overlays, in the order they stack. Every render tail appends
+    // exactly this, so adding one is a line here rather than an edit at three
+    // call sites that must not drift apart.
+    //
+    // Order is by urgency, not by when they were written: the error banner
+    // reports on state the others may be describing wrongly, so it wins; a
+    // confirm gate is modal and outranks reference material; key help and
+    // history are both dismissable reading.
+    function overlayHTML() {
+      return renderErrorOverlay()
+           + renderConfirm()
+           + renderKeyHelp()
+           + renderHistory();
+    }
+
+    // Generic yes/no gate. askConfirm() stores the action to dispatch on yes, so
+    // one overlay serves abandoning a run and clearing save data alike.
+    function renderConfirm() {
+      const c = STATE.ui && STATE.ui.confirm;
+      if (!c) return '';
+      return `
+        <div class="confirm-overlay">
+          <div class="confirm-panel">
+            <h2 class="confirm-title">${c.title}</h2>
+            <div class="confirm-body">${c.body}</div>
+            <div class="confirm-actions">
+              <button type="button" class="choice-button" data-action="confirmCancel">Cancel</button>
+              <button type="button" class="choice-button${c.danger ? ' removal-button' : ''}" data-action="confirmYes">${c.confirmLabel}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // recordRunResult has always stored ten fields per run and kept the last ten
+    // runs; renderMenu read three of them and showed two. boss, date, gold,
+    // deckSize, relics, act and seed were written and never looked at again.
+    function renderHistory() {
+      if (!STATE.ui || !STATE.ui.history) return '';
+      const meta = loadMeta();
+      const runs = meta.runs || [];
+
+      // Per-character win rate, derived rather than stored — the run records
+      // already carry everything needed.
+      const byChar = {};
+      for (const r of runs) {
+        const k = r.character || 'Unknown';
+        byChar[k] = byChar[k] || { wins: 0, runs: 0, best: 0 };
+        byChar[k].runs++;
+        if (r.won) byChar[k].wins++;
+        byChar[k].best = Math.max(byChar[k].best, r.floor || 0);
+      }
+      const rates = Object.entries(byChar).map(([name, s]) =>
+        `<div class="stat-line"><span>${name}</span><span>${s.wins}/${s.runs} · best F${s.best}</span></div>`).join('')
+        || '<div class="stat-line"><span>No runs yet</span><span>—</span></div>';
+
+      const rows = runs.map(r => {
+        const when = r.date ? String(r.date).slice(0, 10) : '—';
+        return `
+          <tr class="${r.won ? 'run-win' : r.abandoned ? 'run-abandoned' : 'run-loss'}">
+            <td>${r.won ? 'Win' : r.abandoned ? 'Left' : 'Loss'}</td>
+            <td>${r.character || '—'}</td>
+            <td>A${r.ascension || 0}</td>
+            <td>Act ${r.act || 1}</td>
+            <td>F${r.floor || 0}</td>
+            <td>${r.boss || '—'}</td>
+            <td>${r.gold || 0}g</td>
+            <td>${r.deckSize || 0}c / ${r.relics || 0}r</td>
+            <td>${when}</td>
+            <td>${r.seed != null
+              ? `<button type="button" class="inline-chip-button" data-action="useSeed" data-seed="${attrEscape(r.seed)}">${r.seed}</button>`
+              : '—'}</td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div class="history-overlay">
+          <div class="history-panel">
+            <h2 class="panel-title">Run History</h2>
+            <div class="history-content">
+              <div class="stats-box">
+                <div class="stats-box-label">Win rate by character</div>
+                ${rates}
+              </div>
+              <div class="history-scroll">
+                <table class="history-table">
+                  <thead><tr>
+                    <th>Result</th><th>Character</th><th>Asc</th><th>Act</th><th>Floor</th>
+                    <th>Boss</th><th>Gold</th><th>Deck</th><th>Date</th><th>Seed</th>
+                  </tr></thead>
+                  <tbody>${rows || '<tr><td colspan="10">No runs recorded yet.</td></tr>'}</tbody>
+                </table>
+              </div>
+              <div class="inspect-hint">Click a seed to load it into the menu and replay that run.</div>
+            </div>
+            <button type="button" class="leave-button" data-action="closeHistory">Close</button>
+          </div>
+        </div>
+      `;
+    }
 
     function renderKeyHelp() {
       if (!STATE.ui || !STATE.ui.keyHelp) return '';
@@ -6247,8 +6480,10 @@
                 <div class="stat-line"><span>Relics Collected:</span><span>${STATE.run.relics.length}</span></div>
               </div>
             </div>
+            <div class="run-seed-line">Seed <code>${STATE.seed}</code></div>
             <button class="new-run-button" data-action="continueEndless">Continue Into Deeper Vault</button>
-            <button class="new-run-button" data-action="newRun">Play Again</button>
+            <button class="new-run-button" data-action="newRun">Play Again (same character)</button>
+            <button class="new-run-button" data-action="returnToMenu">Return to Menu</button>
           </div>
         </div>
       `;
@@ -6268,7 +6503,9 @@
                 <div class="stat-line"><span>Relics Collected:</span><span>${STATE.run.relics.length}</span></div>
               </div>
             </div>
-            <button class="new-run-button" data-action="newRun">Try Again</button>
+            <div class="run-seed-line">Seed <code>${STATE.seed}</code></div>
+            <button class="new-run-button" data-action="newRun">Try Again (same character)</button>
+            <button class="new-run-button" data-action="returnToMenu">Return to Menu</button>
           </div>
         </div>
       `;
@@ -6395,6 +6632,8 @@
             <div class="status-item stat-floor">${icon('floor')} <span>${STATE.run.floor}/${LAYOUT.FLOORS}</span></div>
             <div class="status-item">${STATE.run.characterName || 'Runner'} A${STATE.ascension || 0} · Act ${STATE.act || 1}</div>
             <button class="inline-chip-button" data-action="viewPile" data-pile="deck">${icon('deck')} Deck ${STATE.run.deck.length}</button>
+            <button class="inline-chip-button" data-action="abandonRun"
+                    data-ititle="Leave run" data-ibody="Abandon this run and return to the title screen. The run is recorded as a loss and the save is deleted.">Menu</button>
           </div>
           <div class="status-right">
             <div class="potion-row">${potionChips}</div>
@@ -6571,9 +6810,76 @@
     // returns early — verified — so the caller's tail render/save always runs.
     function dispatchAction(action, btn) {
       switch (action) {
-        case 'startGame':
-          startNewRun({ characterId: btn.dataset.characterid || 'cinder-knight', ascension: parseInt(btn.dataset.ascension || '0') || 0 });
+        case 'startGame': {
+          // The seed field is read HERE, at click time, rather than through an
+          // input listener. #app has exactly one delegated listener by design
+          // (see the two rules in OVERVIEW), and one field does not justify a
+          // second dispatch path — the value only matters at the moment you
+          // press Start.
+          const seedEl = document.getElementById('seed-input');
+          const raw = seedEl ? String(seedEl.value).trim() : '';
+          const parsed = raw === '' ? null : Number(raw);
+          const opts = {
+            characterId: btn.dataset.characterid || 'cinder-knight',
+            ascension: parseInt(btn.dataset.ascension || '0') || 0
+          };
+          // A non-numeric seed is ignored rather than becoming NaN, which would
+          // poison seedRng and make the "same seed, same run" promise a lie.
+          if (parsed != null && Number.isFinite(parsed)) opts.seed = parsed >>> 0;
+          startNewRun(opts);
           goTo(SCREENS.BOON);
+          break;
+        }
+
+        // Typing into the seed field does not re-render (no input listener), so
+        // the value only needs preserving when something ELSE redraws the menu —
+        // opening history, then closing it again.
+        case 'useSeed':
+          STATE.ui.seedInput = btn.dataset.seed || '';
+          STATE.ui.history = false;
+          break;
+
+        case 'viewHistory':
+          // Keep whatever is already typed so opening history does not discard it.
+          {
+            const el = document.getElementById('seed-input');
+            if (el) STATE.ui.seedInput = el.value;
+          }
+          STATE.ui.history = true;
+          break;
+
+        case 'closeHistory':
+          STATE.ui.history = false;
+          break;
+
+        case 'abandonRun':
+          askConfirm(
+            'Leave this run?',
+            `You are on floor ${STATE.run.floor} with ${STATE.run.hp} HP. Leaving records the run as a loss and deletes the save. This cannot be undone.`,
+            'Leave run', 'doAbandonRun', true);
+          break;
+
+        case 'confirmCancel':
+          STATE.ui.confirm = null;
+          break;
+
+        case 'confirmYes': {
+          const pending = STATE.ui.confirm;
+          STATE.ui.confirm = null;
+          if (pending && pending.action) dispatchAction(pending.action, btn);
+          break;
+        }
+
+        case 'doAbandonRun':
+          // recordRunResult also clears the save, and marks this as a departure
+          // rather than a death so the history can tell them apart.
+          STATE.run.abandoned = true;
+          recordRunResult(STATE, false);
+          returnToMenu();
+          break;
+
+        case 'returnToMenu':
+          returnToMenu();
           break;
 
         case 'chooseBoon': {
@@ -6884,6 +7190,18 @@
     function handleKeydown(e) {
       if (!STATE) return;
       if (e.key === 'Escape') {
+        // Dismiss order mirrors overlayHTML()'s stacking order: whatever is on
+        // top goes first, so Esc always closes the thing you are looking at.
+        if (STATE.ui && STATE.ui.confirm) {
+          STATE.ui.confirm = null;
+          render();
+          return;
+        }
+        if (STATE.ui && STATE.ui.history) {
+          STATE.ui.history = false;
+          render();
+          return;
+        }
         if (STATE.ui && STATE.ui.inspect) {
           STATE.ui.inspect = null;
           render();
