@@ -232,7 +232,8 @@
 
     .menu-title {
       font-size: var(--fs-3xl);
-      margin-bottom: 20px;
+      margin: 0 0 20px;
+      font-weight: normal;
       color: var(--color-danger);
       text-shadow: 0 0 10px rgba(220, 50, 47, 0.25);
     }
@@ -1120,6 +1121,8 @@
     .log-head {
       flex: 0 0 auto;
       padding: 0.5rem 0.75rem;
+      margin: 0;                       /* it is an <h2> now; UA margin would offset the panel */
+      font-size: var(--fs-base);
       border-bottom: 2px solid var(--border-color);
       font-weight: bold;
       letter-spacing: 0.05em;
@@ -1293,10 +1296,15 @@
       max-width: min(64rem, 100%);   /* must also lift the base 42rem cap */
     }
 
+    /* These are <h1>/<h2> now — the file had zero heading elements, so assistive
+       tech had no structure to navigate by. margin-top and font-weight are reset
+       explicitly because the UA sets both on headings and neither was declared
+       here, so adopting the tag would otherwise have moved every panel. */
     .panel-title {
       flex: 0 0 auto;
       font-size: var(--fs-xl);
-      margin-bottom: 20px;
+      margin: 0 0 20px;
+      font-weight: normal;
       color: var(--text-primary);
       text-align: center;
     }
@@ -1386,6 +1394,40 @@
     .potion-slot.empty { cursor: default; }
     .disabled-choice { cursor: not-allowed; }
 
+    /* === Native control reset ===
+       Phase 5 turned map nodes, enemy panels, cards, shop items, potion slots,
+       status chips and relic chips from <div data-action> into real <button>s,
+       so that the game is reachable by keyboard at all. A <button> brings the
+       UA stylesheet with it — centred text, its own font, a system border and
+       background — which would otherwise redraw all of those. These properties
+       are exactly the ones the UA sets and each element's own rule does not. */
+    button.card, button.map-node, button.enemy-panel, button.shop-item,
+    button.potion-slot, button.status-chip, button.relic-chip {
+      font: inherit;
+      color: inherit;
+      text-align: inherit;
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+    }
+    /* The UA's disabled greying would fight each element's own dim state. */
+    button.card:disabled, button.map-node:disabled, button.shop-item:disabled,
+    button.potion-slot:disabled, .choice-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.map-node:disabled { opacity: 1; }   /* locked nodes have their own .locked styling */
+
+    /* === Focus ===
+       There was no :focus rule anywhere in this file, against 22 :hover rules —
+       so even the elements that WERE buttons showed only the browser default,
+       and the ones that were divs could not be focused at all. Keyboard players
+       need to see where they are. :focus-visible, so a mouse click does not
+       leave a ring behind. */
+    :focus-visible {
+      outline: 3px solid var(--color-skill);
+      outline-offset: 2px;
+    }
+    .map-node:focus-visible { outline-offset: 4px; }
+    .card:focus-visible { outline-offset: -3px; }   /* cards sit flush in the hand */
+
     /* Targeting: the enemy you are about to hit should say so under the cursor. */
     .enemy-panel.targetable { cursor: crosshair; }
     .enemy-panel.targetable:hover {
@@ -1411,9 +1453,33 @@
       transition: all 0.2s;
     }
 
-    .shop-item:hover {
+    .shop-item:hover:not(:disabled) {
       border-color: var(--text-primary);
     }
+
+    /* Sold is inert; unaffordable is something more gold would fix, so they
+       read differently rather than sharing one dim. Replaces the inline
+       styles renderShop used to hand-roll on every item. */
+    .shop-item.sold { opacity: 0.35; cursor: default; }
+    .shop-item.unaffordable { opacity: 0.55; cursor: not-allowed; }
+    .shop-item-name {
+      font-weight: bold;
+      text-align: center;
+      word-break: break-word;
+      margin-bottom: 5px;
+    }
+
+    .shop-gold { color: var(--color-gold); font-weight: bold; margin-bottom: 15px; }
+    .shop-gold-note { color: var(--text-muted); font-weight: normal; }
+    .shop-section { margin-bottom: 20px; }
+    .shop-section-title {
+      color: var(--text-muted);
+      margin: 0 0 10px;
+      font-size: var(--fs-base);
+      font-weight: normal;
+    }
+    .shop-removal { border-top: 1px solid var(--border-color); padding-top: 15px; }
+    .removal-button { color: var(--color-danger); }
 
     .shop-item-price {
       color: var(--color-gold);
@@ -1473,7 +1539,8 @@
     .victory-title {
       font-size: var(--fs-2xl);
       color: var(--color-heal);
-      margin-bottom: 20px;
+      margin: 0 0 20px;
+      font-weight: normal;
     }
 
     .gameover-panel {
@@ -5047,9 +5114,38 @@
       }
     }
 
+    // Which control currently has focus, expressed so it can be found again in
+    // the DOM that replaces this one. render() rebuilds #app's entire innerHTML,
+    // which destroys focus outright — so without this, a keyboard player who
+    // activates anything is dumped back to the top of the document and has to
+    // Tab all the way in again, every single action.
+    const FOCUS_DISCRIMINATORS = ['nodeid', 'carduid', 'slot', 'cardid', 'relicid',
+      'potionidx', 'choiceidx', 'choice', 'pile', 'boonid', 'cache', 'turn',
+      'characterid', 'enemyuid'];
+
+    function focusKey(el) {
+      if (!el || !el.dataset || !el.dataset.action) return null;
+      const action = el.dataset.action;
+      for (const k of FOCUS_DISCRIMINATORS) {
+        const v = el.dataset[k];
+        if (v != null) return `[data-action="${action}"][data-${k}="${String(v).replace(/"/g, '\\"')}"]`;
+      }
+      return `[data-action="${action}"]`;
+    }
+
+    function restoreFocus(app, key) {
+      if (!key) return;
+      let el;
+      try { el = app.querySelector(key); } catch (e) { return; }
+      // preventScroll: the map does its own scrollMapToFocus on the next frame,
+      // and a focus-driven scroll would fight it.
+      if (el && !el.disabled) el.focus({ preventScroll: true });
+    }
+
     function renderScreen() {
       _renderCount++;
       const app = document.getElementById('app');
+      const priorFocus = focusKey(document.activeElement);
 
       // Overlays (card picker / pile viewer) use the same single-render strategy.
       // Both fall through to the shared tail so the inspect panel can sit on top
@@ -5057,10 +5153,12 @@
       let html = '';
       if (STATE.ui && STATE.ui.pileViewer) {
         app.innerHTML = statusBarHTML() + renderPileViewer() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+        restoreFocus(app, priorFocus);
         return;
       }
       if (STATE.ui && STATE.ui.picker) {
         app.innerHTML = statusBarHTML() + renderCardPicker() + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+        restoreFocus(app, priorFocus);
         return;
       }
 
@@ -5101,6 +5199,7 @@
       }
 
       app.innerHTML = statusBarHTML() + html + renderInspectPanel() + renderKeyHelp() + renderErrorOverlay();
+      restoreFocus(app, priorFocus);
       if (STATE.screen === SCREENS.MAP) requestAnimationFrame(scrollMapToFocus);
       AudioEngine.updateMusic(STATE);
     }
@@ -5157,7 +5256,7 @@
       return `
         <div class="screen menu-screen">
           <div class="menu-panel">
-            <div class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</div>
+            <h1 class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</h1>
             <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v6</div>
             ${saveButton}
             <div class="menu-section-label">Start a new run</div>
@@ -5188,7 +5287,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel">
-            <div class="panel-title">${icon('t-event','icon-title')} Before the Descent ${icon('t-event','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-event','icon-title')} Before the Descent ${icon('t-event','icon-title')}</h2>
             <div class="panel-content">
               <div class="panel-text">
                 A figure waits at the vault mouth with four offerings for
@@ -5259,13 +5358,18 @@
         const statusClass = isCurrent ? 'current' : node.visited ? 'visited' : isAvailable ? 'available' : 'locked';
         const typeClass = node.type === NODE_TYPES.ELITE ? 'elite-node' : node.type === NODE_TYPES.BOSS ? 'boss-node' : '';
         const label = node.type === NODE_TYPES.BOSS && STATE.run.bossName ? STATE.run.bossName : node.type;
+        // Every node is a real <button>, unreachable ones simply disabled. The
+        // map was previously divs with data-action omitted when locked, which
+        // made the whole screen unreachable by keyboard — you could start a run
+        // and then not leave the first map.
         return `
-          <div class="map-node ${statusClass} ${typeClass}" style="left:${(pos.x / canvasW * 100).toFixed(3)}%; top:${pos.y}px;"
-               data-nodeid="${node.id}" ${isAvailable ? `data-action="travelNode"` : ''}
+          <button type="button" class="map-node ${statusClass} ${typeClass}" style="left:${(pos.x / canvasW * 100).toFixed(3)}%; top:${pos.y}px;"
+               data-nodeid="${node.id}" data-action="travelNode"${isAvailable ? '' : ' disabled'}
+               aria-label="${attrEscape(`Floor ${node.floor} ${label}${isCurrent ? ', you are here' : node.visited ? ', visited' : isAvailable ? '' : ', unreachable'}`)}"
                data-ititle="${attrEscape(label)}" data-ibody="${attrEscape(`Floor ${node.floor}.${isAvailable ? ' Click to travel here.' : isCurrent ? ' You are here.' : node.visited ? ' Already visited.' : ' Not reachable from where you stand.'}`)}">
             <div class="map-node-icon">${nodeIcon(node.type)}</div>
             <div class="map-node-type">${node.type === NODE_TYPES.BOSS ? 'BOSS' : node.type}</div>
-          </div>
+          </button>
         `;
       }).join('');
 
@@ -5326,8 +5430,18 @@
       if (opts.extraClass) classes.push(opts.extraClass);
       if (opts.staticFace) classes.push('static-face');
       if (opts.disabled) classes.push('disabled-choice');
+      // A card that does something is a <button>; a card that is only being
+      // shown (pile viewer) stays a <div>. A DISABLED control is still a button
+      // carrying its data-action plus the real `disabled` attribute — it used to
+      // be an inert div with the action omitted, which left it unreachable by
+      // keyboard AND announced as an ordinary element rather than a dead one.
+      const interactive = !!opts.action || !!opts.disabled;
+      const tag = (interactive && !opts.staticFace) ? 'button' : 'div';
       const hook = opts.action
         ? `data-action="${opts.action}"${opts.dataAttr ? ` ${opts.dataAttr}="${opts.dataValue}"` : ''}`
+        : '';
+      const btnAttrs = tag === 'button'
+        ? ` type="button"${opts.disabled ? ' disabled' : ''}`
         : '';
       const desc = describeCard(cardOrDef, opts.previewUpgraded);
       // Hover-tooltip anchor, emitted directly rather than via inspectAttrs():
@@ -5339,7 +5453,7 @@
         `data-ititle="${attrEscape(def.name + (isUpgraded ? '+' : ''))}" ` +
         `data-ibody="${attrEscape([desc, opts.warning, opts.note, opts.titleSuffix].filter(Boolean).join('\n'))}"`;
       return `
-        <div class="${classes.join(' ')}" ${hook} ${tip}>
+        <${tag} class="${classes.join(' ')}"${btnAttrs} ${hook} ${tip}>
           <div class="card-cost">${def.cost}</div>
           <div class="card-name">${def.name}${isUpgraded ? '+' : ''}</div>
           <div class="card-art">${cardArtIcon(defId, def.type)}</div>
@@ -5347,7 +5461,7 @@
           <div class="card-desc">${desc}</div>
           ${opts.warning ? `<div class="card-lethal-warning">${opts.warning}</div>` : ''}
           ${opts.note ? `<div class="card-note">${opts.note}</div>` : ''}
-        </div>
+        </${tag}>
       `;
     }
 
@@ -5457,9 +5571,14 @@
         </div>`;
       }).join('');
 
+      // aria-live on the log, and only on the log: it is the one element that
+      // already narrates every state change in prose, so it is the natural
+      // announcement channel for damage dealt, statuses applied and combat end.
+      // "polite" rather than "assertive" — a turn resolves as several entries at
+      // once and assertive would interrupt itself.
       return `<div class="combat-log-panel">
-        <div class="log-head">Combat Log</div>
-        <div class="log-scroll">${renderIncoming(game)}${blocks}</div>
+        <h2 class="log-head">Combat Log</h2>
+        <div class="log-scroll" role="log" aria-live="polite" aria-label="Combat log">${renderIncoming(game)}${blocks}</div>
       </div>`;
     }
 
@@ -5504,6 +5623,14 @@
       return `data-action="inspect" data-ititle="${attrEscape(title)}" data-ibody="${attrEscape(body)}"`;
     }
 
+    // Hover tooltip WITHOUT the inspect action. For anything nested inside a
+    // control: a second data-action inside a <button> is a nested interactive
+    // element, which is invalid, and closest('[data-action]') would resolve to
+    // the inner one and swallow the outer control's click.
+    function tipAttrs(title, body) {
+      return `data-ititle="${attrEscape(title)}" data-ibody="${attrEscape(body)}"`;
+    }
+
     function renderInspectPanel() {
       const info = STATE.ui && STATE.ui.inspect;
       if (!info) return '';
@@ -5534,7 +5661,7 @@
       return `
         <div class="key-help" data-action="closeKeyHelp">
           <div class="key-help-panel">
-            <div class="panel-title">Keyboard</div>
+            <h2 class="panel-title">Keyboard</h2>
             <dl class="key-help-list">
               ${KEY_HELP.map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join('')}
             </dl>
@@ -5559,7 +5686,8 @@
         const hpPercent = Math.max(0, Math.min(100, (enemy.hp / enemy.maxHp) * 100));
         const statusHTML = Object.entries(enemy.statuses).filter(([k, v]) => v > 0).map(([k, v]) => {
           const info = STATUS_INFO[k];
-          return `<div class="status-chip" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
+          // tipAttrs, not inspectAttrs: these sit inside the enemy <button>.
+          return `<span class="status-chip" ${tipAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></span>`;
         }).join('');
 
         const it = enemy.intent ? enemy.intent.type : 'UNKNOWN';
@@ -5573,10 +5701,21 @@
           ? `<div class="dmg-preview ${lethal ? 'lethal' : ''}">${lethal ? 'LETHAL' : `−${predicted}`}</div>`
           : '';
 
+        // Always a <button>, never `disabled` — the action swaps instead. Two
+        // reasons it is not a disabled button when you are not targeting:
+        // Chrome suppresses pointer events on disabled controls, which would
+        // kill the hover tooltip that is this panel's main job; and the panel
+        // is still useful as a click-to-pin inspect target between targets.
+        // The nested inspect anchor that used to sit on .enemy-intent is gone
+        // with it — nesting a second control inside a button is invalid, and
+        // this panel's own tooltip already states the intent.
+        const panelBody = `${enemy.hp}/${enemy.maxHp} HP.\nNext turn: ${intentDesc[it] || 'unknown'}${intentValue !== '' ? ' for ' + intentValue : ''}.`;
         return `
-          <div class="enemy-panel ${targeting ? 'targetable' : ''} ${lethal ? 'lethal-target' : ''}" data-enemyuid="${enemy.uid}" ${targeting ? `data-action="targetEnemy"` : ''}
-               data-ititle="${attrEscape(enemy.name)}" data-ibody="${attrEscape(`${enemy.hp}/${enemy.maxHp} HP.\nNext turn: ${intentDesc[it] || 'unknown'}${intentValue !== '' ? ' for ' + intentValue : ''}.`)}">
-            <div class="enemy-intent" ${inspectAttrs(enemy.name + ' — ' + (intentDesc[it] || 'Unknown'), `Next turn: ${intentDesc[it] || 'unknown'}${intentValue !== '' ? ' for ' + intentValue : ''}.`)}>${intentIcon} ${intentValue}</div>
+          <button type="button" class="enemy-panel ${targeting ? 'targetable' : ''} ${lethal ? 'lethal-target' : ''}" data-enemyuid="${enemy.uid}"
+               data-action="${targeting ? 'targetEnemy' : 'inspect'}"
+               aria-label="${attrEscape(`${enemy.name}, ${enemy.hp} of ${enemy.maxHp} HP${targeting ? ', press to target' : ''}`)}"
+               data-ititle="${attrEscape(enemy.name)}" data-ibody="${attrEscape(panelBody)}">
+            <div class="enemy-intent">${intentIcon} ${intentValue}</div>
             <div class="enemy-body">
               <div class="enemy-portrait">${enemyIcon(enemy.defId)}</div>
               <div class="enemy-info">
@@ -5588,13 +5727,15 @@
                 <div class="statuses">${statusHTML}</div>
               </div>
             </div>
-          </div>
+          </button>
         `;
       }).join('');
 
+      // The player's chips are not inside a control, so they keep click-to-pin
+      // and become real buttons.
       const playerStatusHTML = Object.entries(player.statuses).filter(([k, v]) => v > 0).map(([k, v]) => {
         const info = STATUS_INFO[k];
-        return `<div class="status-chip" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></div>`;
+        return `<button type="button" class="status-chip" ${inspectAttrs(`${statusLabel(k)} ${v}`, info ? info.desc : '')}>${statusIcon(k)}<span class="chip-count">${v}</span></button>`;
       }).join('');
 
       const energyOrbs = Array(Math.max(energyMax, energy)).fill(0).map((_, i) => `<div class="energy-orb ${i < energy ? 'full' : 'empty'}">${i < energy ? icon('energy') : ''}</div>`).join('');
@@ -5607,7 +5748,7 @@
         if (!pid) return `<div class="potion-slot empty" data-ititle="Empty potion slot" data-ibody="Potions you pick up land here.">·</div>`;
         const pdef = POTIONS_DB[pid];
         const selected = STATE.combat.pendingPotionSlot === slot;
-        return `<div class="potion-slot" data-action="usePotion" data-slot="${slot}" data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || 'Use potion.') + (selected ? '\nSelect a target, or press Esc to cancel.' : ''))}">${potionIcon(pid)}</div>`;
+        return `<button type="button" class="potion-slot${selected ? ' selected' : ''}" data-action="usePotion" data-slot="${slot}" aria-label="${attrEscape('Use ' + pdef.name)}" data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || 'Use potion.') + (selected ? '\nSelect a target, or press Esc to cancel.' : ''))}">${potionIcon(pid)}</button>`;
       }).join('');
 
       const handHTML = hand.map(card => {
@@ -5696,8 +5837,11 @@
       const canRefine = STATE.run.deck.some(c => !c.upgraded && !isCurseCardInstance(c));
       const canPurge = STATE.run.deck.length > 1;
 
+      // `disabled`, not "omit the data-action". The old form left a button that
+      // was still tab-focusable and still announced as enabled, and did nothing
+      // when pressed, with no feedback.
       const option = (choice, label, desc, enabled) => `
-        <button class="choice-button ${enabled ? '' : 'disabled-choice'}" ${enabled ? `data-action="applyRestChoice" data-choice="${choice}"` : ''}>
+        <button type="button" class="choice-button ${enabled ? '' : 'disabled-choice'}" data-action="applyRestChoice" data-choice="${choice}"${enabled ? '' : ' disabled'}>
           <span class="choice-label">${label}</span>
           <span class="choice-desc">${desc}</span>
         </button>
@@ -5706,7 +5850,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel">
-            <div class="panel-title">${icon('t-rest','icon-title')} Rest Site ${icon('t-rest','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-rest','icon-title')} Rest Site ${icon('t-rest','icon-title')}</h2>
             <div class="panel-content">
               <div class="panel-text">You've reached a safe place to rest. Choose one action:</div>
               ${option('rest', 'Rest',
@@ -5737,16 +5881,20 @@
         const affordable = !sold && canBuy && gold >= price;
         // Sold is inert; unaffordable is something you could buy with more gold,
         // so the cursor distinguishes them.
-        const style = sold ? 'opacity:0.35; cursor:default;' : (!affordable ? 'opacity:0.55; cursor:not-allowed;' : '');
-        const clickable = sold || !affordable ? '' : `data-action="${action}" ${dataAttr}`;
         const priceLabel = sold ? 'SOLD' : `${icon('gold')} ${price}`;
+        const state = sold ? ' sold' : (!affordable ? ' unaffordable' : '');
+        // Always a real <button> carrying its data-action, `disabled` when it
+        // cannot be bought. It used to be a <div> with the action omitted, which
+        // made the entire shop unreachable by keyboard and left the dimmed items
+        // announcing as ordinary content rather than unavailable controls.
         return `
-          <div class="shop-item" ${clickable} style="${style}">
+          <button type="button" class="shop-item${state}" data-action="${action}" ${dataAttr}${sold || !affordable ? ' disabled' : ''}
+                  aria-label="${attrEscape(label + (sold ? ', sold out' : !affordable ? ', cannot afford, ' + price + ' gold' : ', ' + price + ' gold'))}">
             ${iconHtml ? `<div class="shop-item-icon">${iconHtml}</div>` : ''}
-            <div style="font-weight: bold; text-align: center; word-break: break-word; margin-bottom: 5px;">${label}</div>
+            <div class="shop-item-name">${label}</div>
             ${desc ? `<div class="shop-item-desc">${desc}</div>` : ''}
             <div class="shop-item-price">${priceLabel}</div>
-          </div>
+          </button>
         `;
       };
 
@@ -5762,23 +5910,23 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel wide">
-            <div class="panel-title">${icon('t-shop','icon-title')} Shop ${icon('t-shop','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-shop','icon-title')} Shop ${icon('t-shop','icon-title')}</h2>
             <div class="panel-content">
-              <div style="color: var(--color-gold); font-weight: bold; margin-bottom: 15px;">Gold: ${gold}${potionsFull ? '  <span style="color:var(--text-muted); font-weight:normal;">(potion slots full)</span>' : ''}</div>
-              <div style="margin-bottom: 20px;">
-                <div style="color: var(--text-muted); margin-bottom: 10px;">Cards</div>
+              <div class="shop-gold">Gold: ${gold}${potionsFull ? ' <span class="shop-gold-note">(potion slots full)</span>' : ''}</div>
+              <section class="shop-section">
+                <h3 class="shop-section-title">Cards</h3>
                 <div class="card-list">${cardsHTML}</div>
-              </div>
-              <div style="margin-bottom: 20px;">
-                <div style="color: var(--text-muted); margin-bottom: 10px;">Relics</div>
+              </section>
+              <section class="shop-section">
+                <h3 class="shop-section-title">Relics</h3>
                 <div class="card-list">${relicsHTML}</div>
-              </div>
-              <div style="margin-bottom: 20px;">
-                <div style="color: var(--text-muted); margin-bottom: 10px;">Potions</div>
+              </section>
+              <section class="shop-section">
+                <h3 class="shop-section-title">Potions</h3>
                 <div class="card-list">${potionsHTML}</div>
-              </div>
-              <div style="border-top: 1px solid var(--border-color); padding-top: 15px;">
-                <button class="choice-button" ${canRemove ? 'data-action="removeCard"' : ''} style="color: var(--color-danger); ${canRemove ? '' : 'opacity:0.5; cursor:default;'}">
+              </section>
+              <div class="shop-removal">
+                <button type="button" class="choice-button removal-button" data-action="removeCard"${canRemove ? '' : ' disabled'}>
                   <span class="choice-label">Remove a Card</span>
                   <span class="choice-desc">Remove a card from your deck. Cost: ${icon('gold')} ${removalCost}</span>
                 </button>
@@ -5797,7 +5945,7 @@
       const choicesHTML = event.choices.map((choice, idx) => {
         const canApply = !choice.canApply || choice.canApply(STATE);
         return `
-          <button class="choice-button ${canApply ? '' : 'disabled-choice'}" ${canApply ? `data-action="chooseEvent" data-choiceidx="${idx}"` : ''}>
+          <button type="button" class="choice-button ${canApply ? '' : 'disabled-choice'}" data-action="chooseEvent" data-choiceidx="${idx}"${canApply ? '' : ' disabled'}>
             <span class="choice-label">${choice.label}</span>
             ${choice.desc ? `<span class="choice-desc">${choice.desc}${canApply ? '' : ' (Unavailable)'}</span>` : ''}
           </button>
@@ -5807,7 +5955,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel">
-            <div class="panel-title">${icon('t-event','icon-title')} ${event.title} ${icon('t-event','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-event','icon-title')} ${event.title} ${icon('t-event','icon-title')}</h2>
             <div class="panel-content">
               <div class="panel-text">${event.text}</div>
               ${choicesHTML}
@@ -5853,7 +6001,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel wide">
-            <div class="panel-title">${icon('t-reward','icon-title')} Combat Reward ${icon('t-reward','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-reward','icon-title')} Combat Reward ${icon('t-reward','icon-title')}</h2>
             <div class="panel-content">
               <div class="reward-summary">Gold gained: <strong style="color:var(--color-gold);">${icon('gold')} ${reward.gold || 0}</strong>${reward.isElite ? ' · Elite defeated' : ''}</div>
               ${eventRewardHTML}
@@ -5952,7 +6100,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel">
-            <div class="panel-title">${icon('t-treasure','icon-title')} Treasure ${icon('t-treasure','icon-title')}</div>
+            <h2 class="panel-title">${icon('t-treasure','icon-title')} Treasure ${icon('t-treasure','icon-title')}</h2>
             <div class="panel-content">${body}</div>
             ${result ? '<button class="leave-button" data-action="leaveTreasure">Continue</button>' : ''}
           </div>
@@ -5964,7 +6112,7 @@
       return `
         <div class="screen victory-screen">
           <div class="victory-panel">
-            <div class="victory-title">${icon('t-victory','icon-title')} VICTORY! ${icon('t-victory','icon-title')}</div>
+            <h1 class="victory-title">${icon('t-victory','icon-title')} VICTORY! ${icon('t-victory','icon-title')}</h1>
             <div class="panel-content">
               <div class="panel-text">You have defeated ${STATE.run.bossName || 'the vault boss'} and escaped Act ${STATE.act || 1} of the Cinder Vault!</div>
               <div class="stats-box">
@@ -6018,9 +6166,10 @@
         const note = cardDef.type === CARD_TYPES.CURSE && !isRemove ? 'curses cannot be upgraded'
           : (card.upgraded && !isRemove ? 'already upgraded' : '');
         return cardFaceHTML(card, {
-          // Omitting `action` is what makes a disabled face inert — a <div> has no
-          // `disabled` attribute to fall back on.
-          action: disabled ? '' : 'pickCard',
+          // Keeps its data-action even when disabled: cardFaceHTML emits a real
+          // <button disabled>, so the click never fires and assistive tech
+          // announces it as unavailable instead of as a plain element.
+          action: 'pickCard',
           dataAttr: 'data-carduid',
           dataValue: card.uid,
           // On the upgrade picker, show what you would GET (the name stays unsuffixed
@@ -6034,7 +6183,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel wide">
-            <div class="panel-title">${title}</div>
+            <h2 class="panel-title">${title}</h2>
             <div class="panel-content">
               <div class="panel-text">${desc}</div>
               ${cardsHTML}
@@ -6087,7 +6236,7 @@
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel wide">
-            <div class="panel-title">${title}</div>
+            <h2 class="panel-title">${title}</h2>
             ${statsHTML}
             <div class="panel-content">${cardsHTML}</div>
             <button class="leave-button" data-action="closeOverlay">Close</button>
@@ -6100,7 +6249,7 @@
       const relicChips = STATE.run.relics.map(relic => {
         const relicDef = RELICS_DB[relic];
         const abbr = relicDef.short || relic.substring(0, 2).toUpperCase();
-        return `<div class="relic-chip" ${inspectAttrs(relicDef.name, relicDef.description)}>${relicIcon(relic, abbr)}</div>`;
+        return `<button type="button" class="relic-chip" aria-label="${attrEscape(relicDef.name)}" ${inspectAttrs(relicDef.name, relicDef.description)}>${relicIcon(relic, abbr)}</button>`;
       }).join('');
       const potionChips = STATE.run.potions.map((pid, slot) => {
         if (!pid) return `<div class="potion-slot empty" data-ititle="Empty potion slot" data-ibody="Potions you pick up land here.">·</div>`;
@@ -6108,8 +6257,8 @@
         const usable = STATE.combat || pdef.usableOutOfCombat;
         return `
           <div class="potion-slot-wrap">
-            <div class="potion-slot" ${usable ? `data-action="usePotion" data-slot="${slot}"` : ''} data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || '') + (!STATE.combat && !pdef.usableOutOfCombat ? '\nCombat only.' : ''))}">${potionIcon(pid)}</div>
-            <button class="potion-discard" data-action="discardPotion" data-slot="${slot}" data-ititle="Discard" data-ibody="${attrEscape('Throw away ' + pdef.name + ' to free the slot.')}">×</button>
+            <button type="button" class="potion-slot" data-action="usePotion" data-slot="${slot}"${usable ? '' : ' disabled'} aria-label="${attrEscape('Use ' + pdef.name + (usable ? '' : ' (combat only)'))}" data-ititle="${attrEscape(pdef.name)}" data-ibody="${attrEscape((pdef.desc || '') + (!STATE.combat && !pdef.usableOutOfCombat ? '\nCombat only.' : ''))}">${potionIcon(pid)}</button>
+            <button type="button" class="potion-discard" data-action="discardPotion" data-slot="${slot}" aria-label="${attrEscape('Discard ' + pdef.name)}" data-ititle="Discard" data-ibody="${attrEscape('Throw away ' + pdef.name + ' to free the slot.')}">×</button>
           </div>
         `;
       }).join('');
