@@ -553,6 +553,13 @@
        ancestor any more). Never add a transform to an ancestor of this element —
        that would re-create the containment bug the stage used to have. */
     .inspect-panel {
+      /* A <button> now (keyboard reachability), so it needs the native reset
+         the other converted controls got. */
+      font: inherit;
+      color: inherit;
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
       position: fixed;
       left: 50%;
       /* End Turn lives in the dock's RIGHT column, so a horizontally-centred
@@ -581,11 +588,21 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+    }
+
+    /* The dismiss target, behind the panel rather than wrapping it — see
+       renderKeyHelp for why that distinction is load-bearing. */
+    .key-help-backdrop {
+      position: absolute;
+      inset: 0;
+      border: 0;
+      padding: 0;
       background: rgba(0, 0, 0, 0.45);
       cursor: pointer;
     }
 
     .key-help-panel {
+      position: relative;   /* above the backdrop */
       max-width: min(32rem, 100%);
       max-height: 100%;
       overflow-y: auto;
@@ -593,6 +610,28 @@
       border: 2px solid var(--border-color);
       background: var(--bg-panel);
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .help-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; justify-content: center; flex-wrap: wrap; }
+    .help-tab {
+      font: inherit;
+      font-size: var(--fs-sm);
+      padding: 0.3rem 0.75rem;
+      color: var(--text-muted);
+      background: var(--bg-dark);
+      border: 2px solid var(--border-color);
+      cursor: pointer;
+    }
+    .help-tab.active { color: var(--text-primary); border-color: var(--color-skill); }
+
+    /* Inline glossary term inside rules text. Deliberately understated: it is a
+       hover affordance on text that must stay readable at --card-min, not a
+       link. A dotted underline reads as "there is more here" without competing
+       with the card's own colour coding. */
+    .kw {
+      text-decoration: underline dotted currentColor;
+      text-underline-offset: 0.15em;
+      cursor: help;
     }
 
     .key-help-list {
@@ -2124,6 +2163,40 @@
       brittle: { label: 'Brittle', short: 'Brt', desc: 'Block gained is reduced by 25%. Decays each turn.' },
       aegis: { label: 'Aegis', short: 'Aeg', desc: 'Negates the next debuff applied. One stack per debuff.' }
     };
+
+    // Card keywords. These existed only as boolean flags on card definitions and
+    // as words appended to rules text; nothing in the game ever said what they
+    // meant. Documented here so the glossary and the inline tooltips read from
+    // one source rather than each carrying its own copy of the wording.
+    const KEYWORD_INFO = {
+      Exhaust:    { label: 'Exhaust', desc: 'When played, this card leaves the fight entirely instead of going to your discard pile. It comes back next combat.' },
+      Ethereal:   { label: 'Ethereal', desc: 'If this card is still in your hand when your turn ends, it is exhausted instead of discarded.' },
+      Retain:     { label: 'Retain', desc: 'This card is not discarded at the end of your turn — you keep it in hand.' },
+      Innate:     { label: 'Innate', desc: 'This card is always drawn in your opening hand.' },
+      Unplayable: { label: 'Unplayable', desc: 'This card cannot be played. It clogs your hand until something removes it.' },
+      Block:      { label: 'Block', desc: 'Absorbs incoming damage before it reaches your HP. Unspent block is lost at the start of your next turn.' },
+      Energy:     { label: 'Energy', desc: 'Spent to play cards. Refills to your maximum at the start of each turn; unspent energy is lost.' },
+      Exhausted:  { label: 'Exhausted', desc: 'Removed from the fight. Exhausted cards return to your deck for the next combat.' }
+    };
+
+    // Every term the inline annotator and the glossary both know about, keyed by
+    // the lowercase word so matching is case-insensitive but display keeps the
+    // casing the card text used.
+    const GLOSSARY_TERMS = (() => {
+      const terms = {};
+      for (const info of Object.values(STATUS_INFO)) {
+        terms[info.label.toLowerCase()] = { title: info.label, body: info.desc };
+      }
+      for (const [word, info] of Object.entries(KEYWORD_INFO)) {
+        terms[word.toLowerCase()] = { title: info.label, body: info.desc };
+      }
+      return terms;
+    })();
+
+    // Longest-first, so "Exhausted" is not matched as "Exhaust" + "ed".
+    const GLOSSARY_RE = new RegExp(
+      '\\b(' + Object.keys(GLOSSARY_TERMS).sort((a, b) => b.length - a.length).join('|') + ')\\b',
+      'gi');
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
@@ -5632,6 +5705,7 @@
                 ${recent}
                 ${hasHistory ? '<button class="inline-chip-button history-open" data-action="viewHistory">Full history</button>' : ''}
                 <button class="inline-chip-button history-open" data-action="openSettings">Settings</button>
+                <button class="inline-chip-button history-open" data-action="openGlossary" data-tab="statuses">Reference</button>
               </div>
             </div>
             <div class="menu-tagline">
@@ -5818,7 +5892,7 @@
           <div class="card-name">${def.name}${isUpgraded ? '+' : ''}</div>
           <div class="card-art">${cardArtIcon(defId, def.type)}</div>
           <div class="card-type">${typeIcon(def.type)} ${def.type}</div>
-          <div class="card-desc">${desc}</div>
+          <div class="card-desc">${annotateKeywords(desc)}</div>
           ${opts.warning ? `<div class="card-lethal-warning">${opts.warning}</div>` : ''}
           ${opts.note ? `<div class="card-note">${opts.note}</div>` : ''}
         </${tag}>
@@ -5993,15 +6067,42 @@
       return `data-ititle="${attrEscape(title)}" data-ibody="${attrEscape(body)}"`;
     }
 
+    // Wraps every glossary term in rules text with its own hover anchor, so
+    // "Apply 3 Blight. Ethereal." explains Blight and Ethereal separately
+    // instead of the whole card repeating itself.
+    //
+    // Two things make this safe, and both matter:
+    //
+    // 1. It runs ONLY on plain text destined for display (.card-desc and the
+    //    shop's item description). describeCard() still returns plain text, and
+    //    that plain version is what goes into data-ibody. Running a replace over
+    //    already-built HTML would corrupt attribute values that happen to
+    //    contain the same words — the card tooltip literally does.
+    // 2. The spans carry NO data-action. Tooltip resolves its anchor with
+    //    closest('[data-ititle]'), so a nested span wins the hover; but the
+    //    card's own selectCard click path walks data-action and is untouched.
+    function annotateKeywords(text) {
+      if (!text) return '';
+      return String(text).replace(GLOSSARY_RE, (match) => {
+        const term = GLOSSARY_TERMS[match.toLowerCase()];
+        if (!term) return match;
+        return `<span class="kw" ${tipAttrs(term.title, term.body)}>${match}</span>`;
+      });
+    }
+
     function renderInspectPanel() {
       const info = STATE.ui && STATE.ui.inspect;
       if (!info) return '';
+      // A <button>, not a <div data-action>: it was one of two controls in the
+      // file that a keyboard could not reach at all (the other was the key-help
+      // backdrop). The audit in tools/cdp-verify.mjs never caught either, since
+      // both only exist while their overlay is open.
       return `
-        <div class="inspect-panel" data-action="closeInspect">
+        <button type="button" class="inspect-panel" data-action="closeInspect">
           <div class="inspect-title">${info.title}</div>
-          <div class="inspect-body">${info.body}</div>
+          <div class="inspect-body">${annotateKeywords(info.body)}</div>
           <div class="inspect-hint">Click or press Esc to dismiss</div>
-        </div>
+        </button>
       `;
     }
 
@@ -6165,16 +6266,54 @@
       `;
     }
 
+    // `?` used to open six keybindings and nothing else. Nine statuses and six
+    // card keywords existed with no in-game explanation anywhere: unless
+    // something had already applied Brittle to you, there was no way to find out
+    // what it did. Now the same overlay is the reference for all three.
     function renderKeyHelp() {
       if (!STATE.ui || !STATE.ui.keyHelp) return '';
+      const tab = STATE.ui.helpTab || 'keys';
+      const tabBtn = (id, label) =>
+        `<button type="button" class="help-tab${tab === id ? ' active' : ''}" data-action="helpTab" data-tab="${id}">${label}</button>`;
+
+      const defList = (entries) => `
+        <dl class="key-help-list">
+          ${entries.map(([term, body, iconHtml]) =>
+            `<dt>${iconHtml || ''}${term}</dt><dd>${body}</dd>`).join('')}
+        </dl>`;
+
+      let body;
+      if (tab === 'statuses') {
+        body = defList(Object.entries(STATUS_INFO).map(([key, info]) =>
+          [info.label, info.desc, statusIcon(key) + ' ']));
+      } else if (tab === 'keywords') {
+        body = defList(Object.values(KEYWORD_INFO).map(info => [info.label, info.desc, '']));
+      } else {
+        body = `<dl class="key-help-list">
+          ${KEY_HELP.map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join('')}
+        </dl>`;
+      }
+
+      // The backdrop keeps its click-to-dismiss, but the panel itself must not:
+      // clicking a tab would otherwise close the whole thing on the way past.
+      // The dismiss target is a real <button> SIBLING of the panel, not a
+      // wrapper around it. As a wrapper it would have to carry data-action, and
+      // then every click inside the panel — a tab, say — would bubble to
+      // closest('[data-action]') and close the overlay on the way past. It also
+      // keeps the click-outside affordance reachable by keyboard, which a
+      // <div data-action> never was.
       return `
-        <div class="key-help" data-action="closeKeyHelp">
+        <div class="key-help">
+          <button type="button" class="key-help-backdrop" data-action="closeKeyHelp" aria-label="Close reference"></button>
           <div class="key-help-panel">
-            <h2 class="panel-title">Keyboard</h2>
-            <dl class="key-help-list">
-              ${KEY_HELP.map(([k, v]) => `<dt><kbd>${k}</kbd></dt><dd>${v}</dd>`).join('')}
-            </dl>
-            <div class="inspect-hint">Click anywhere or press ? or Esc to dismiss</div>
+            <h2 class="panel-title">Reference</h2>
+            <div class="help-tabs">
+              ${tabBtn('keys', 'Keyboard')}
+              ${tabBtn('statuses', 'Statuses')}
+              ${tabBtn('keywords', 'Keywords')}
+            </div>
+            ${body}
+            <div class="inspect-hint">Click outside, or press ? or Esc, to dismiss</div>
           </div>
         </div>
       `;
@@ -6401,7 +6540,7 @@
                   aria-label="${attrEscape(label + (sold ? ', sold out' : !affordable ? ', cannot afford, ' + price + ' gold' : ', ' + price + ' gold'))}">
             ${iconHtml ? `<div class="shop-item-icon">${iconHtml}</div>` : ''}
             <div class="shop-item-name">${label}</div>
-            ${desc ? `<div class="shop-item-desc">${desc}</div>` : ''}
+            ${desc ? `<div class="shop-item-desc">${annotateKeywords(desc)}</div>` : ''}
             <div class="shop-item-price">${priceLabel}</div>
           </button>
         `;
@@ -6784,6 +6923,8 @@
             <div class="status-item stat-floor">${icon('floor')} <span>${STATE.run.floor}/${LAYOUT.FLOORS}</span></div>
             <div class="status-item">${STATE.run.characterName || 'Runner'} A${STATE.ascension || 0} · Act ${STATE.act || 1}</div>
             <button class="inline-chip-button" data-action="viewPile" data-pile="deck">${icon('deck')} Deck ${STATE.run.deck.length}</button>
+            <button class="inline-chip-button" data-action="openGlossary" data-tab="statuses"
+                    data-ititle="Reference" data-ibody="Keybindings, every status effect, and every card keyword.">Help</button>
             <button class="inline-chip-button" data-action="openSettings"
                     data-ititle="Settings" data-ibody="Volume, reduced motion, and save data.">Settings</button>
             <button class="inline-chip-button" data-action="abandonRun"
@@ -7302,6 +7443,15 @@
 
         case 'closeKeyHelp':
           STATE.ui.keyHelp = false;
+          break;
+
+        case 'helpTab':
+          STATE.ui.helpTab = btn.dataset.tab || 'keys';
+          break;
+
+        case 'openGlossary':
+          STATE.ui.keyHelp = true;
+          STATE.ui.helpTab = btn.dataset.tab || 'statuses';
           break;
 
         case 'viewPile':
