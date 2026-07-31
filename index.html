@@ -1832,10 +1832,23 @@
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
+    // Memoised. Every render rebuilds #app's whole innerHTML, and a combat screen
+    // emits roughly 50 icons — 10 cards x (art + type), enemy portraits, intents,
+    // status chips, energy orbs, potion slots and one per relic in the status bar.
+    // Each was a fresh concatenation of a ~1.2KB path string, so a single redraw
+    // rebuilt ~40KB of identical markup from scratch. The set of distinct
+    // (name, cls) pairs is small and fixed, so the cache is bounded by content.
+    const _iconCache = new Map();
     function icon(name, cls) {
+      const key = name + '|' + (cls || '');
+      let html = _iconCache.get(key);
+      if (html !== undefined) return html;
       const d = ICONS[name];
-      if (!d) return '';
-      return '<svg class="icon' + (cls ? ' ' + cls : '') + '" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="' + d + '"/></svg>';
+      html = d
+        ? '<svg class="icon' + (cls ? ' ' + cls : '') + '" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="' + d + '"/></svg>'
+        : '';
+      _iconCache.set(key, html);
+      return html;
     }
     // Content -> icon key lookups.
     const NODE_ICONS = { COMBAT: 'combat', ELITE: 'elite', REST: 'rest', SHOP: 'shop', EVENT: 'event', TREASURE: 'treasure', BOSS: 'boss' };
@@ -3236,6 +3249,7 @@
       try {
         const payload = serializeGame(game);
         localStorage.setItem(SAVE_KEY, payload);
+        _saveCount++;
         return payload;
       } catch (e) { return null; }
     }
@@ -3341,6 +3355,27 @@
     function checkpoint(game) {
       const payload = saveGame(game);
       if (payload) _lastGood = payload;
+    }
+
+    // True while a click or keydown dispatch is in flight.
+    //
+    // goTo() and several mid-action helpers each used to render and save on
+    // their own, on top of the handler's own tail. A navigating click therefore
+    // rebuilt #app two or three times and wrote localStorage two or three times;
+    // Menu Start was three of each (startNewRun -> goTo -> tail). Every one of
+    // those renders re-serialises ~50 SVG icons and re-parses them into fresh
+    // DOM, and every save is a synchronous stringify of the whole run.
+    //
+    // The handler tails now own the single render+save for the whole action.
+    // Anything reached from inside one defers via refresh(); anything calling in
+    // from outside (autoplay, CINDER_DEBUG, initApp) still gets its redraw.
+    let _inDispatch = false;
+    let _renderCount = 0, _saveCount = 0;
+
+    function refresh() {
+      if (_inDispatch) return;
+      render();
+      checkpoint(STATE);
     }
 
     function logError(where, err) {
@@ -3462,6 +3497,19 @@
       };
     }
 
+    // Where a combat FX for `targetKey` belongs on screen. Both FX systems
+    // resolved this identically and then drifted in what they did with it; one
+    // definition means a renamed panel class breaks both at once, visibly,
+    // instead of one of them silently.
+    function anchorRect(targetKey) {
+      const sel = targetKey === 'player'
+        ? '.player-panel'
+        : `.enemy-panel[data-enemyuid="${targetKey}"]`;
+      let anchor = document.querySelector(sel);
+      if (!anchor && targetKey !== 'player') anchor = document.querySelector('.combat-enemies');
+      return anchor ? anchor.getBoundingClientRect() : null;
+    }
+
     // --- Fire-and-forget floating combat numbers (Phase 1.7) ---
     // Appends a transient element over the target's panel, outside the
     // full-rerender cycle, and removes itself when the animation ends.
@@ -3470,13 +3518,8 @@
       AudioEngine.sfx(kind === 'block' ? 'block' : 'hit');
       // Deferred so it runs after render() repaints the DOM for this action.
       setTimeout(() => {
-        const sel = targetKey === 'player'
-          ? '.player-panel'
-          : `.enemy-panel[data-enemyuid="${targetKey}"]`;
-        let anchor = document.querySelector(sel);
-        if (!anchor && targetKey !== 'player') anchor = document.querySelector('.combat-enemies');
-        if (!anchor) return;
-        const rect = anchor.getBoundingClientRect();
+        const rect = anchorRect(targetKey);
+        if (!rect) return;
         const el = document.createElement('div');
         el.className = 'floating-number ' + (kind === 'block' ? 'floating-block' : 'floating-dmg');
         el.textContent = text;
@@ -3501,13 +3544,8 @@
       const def = FX_DEFS[name];
       if (!def) return;
       setTimeout(() => {
-        const sel = targetKey === 'player'
-          ? '.player-panel'
-          : `.enemy-panel[data-enemyuid="${targetKey}"]`;
-        let anchor = document.querySelector(sel);
-        if (!anchor && targetKey !== 'player') anchor = document.querySelector('.combat-enemies');
-        if (!anchor) return;
-        const rect = anchor.getBoundingClientRect();
+        const rect = anchorRect(targetKey);
+        if (!rect) return;
         const cx = rect.left + rect.width / 2;
         // Anchor to the upper third, aligning with where floating damage/block numbers pop.
         const cy = rect.top + rect.height / 3;
@@ -4541,17 +4579,60 @@
       } else if (choice === 'refine') {
         triggerRestRelics();
         game.ui.picker = { purpose: 'refine' };
-        render();
+        refresh();
       } else if (choice === 'purge') {
         if (game.run.deck.length <= 1) return;
         triggerRestRelics();
         game.ui.picker = { purpose: 'purge' };
-        render();
+        refresh();
       } else if (choice === 'fortify') {
         gainMaxHp(game, REST_FORTIFY_HP, true);
         triggerRestRelics();
         goTo(SCREENS.MAP);
       }
+    }
+
+    // 75, then +25 for each removal already bought this run. It used to be
+    // written out three times — the shop's price label, the affordability check
+    // and the deduction — so a change to the ladder had to be made in three
+    // places or the shop would charge a price it did not advertise.
+    function removalPrice(game) {
+      return 75 + 25 * game.run.removalsThisRun;
+    }
+
+    // The three shop purchases were near-identical blocks: find the item, check
+    // gold, check one extra precondition, deduct, grant, mark sold. Only the
+    // find/precondition/grant triple actually differed between them.
+    const SHOP_KINDS = {
+      buyCard: {
+        find: (inv, btn) => inv.cards.find(c => c.id === btn.dataset.cardid && !c.sold),
+        canBuy: () => true,
+        grant: (game, item) => { game.run.deck.push({ uid: uid(), defId: item.id, upgraded: false }); }
+      },
+      buyRelic: {
+        find: (inv, btn) => inv.relics.find(r => r.id === btn.dataset.relicid && !r.sold),
+        canBuy: (game, item) => !hasRelic(game, item.id),
+        grant: (game, item) => grantRelic(game, item.id)
+      },
+      buyPotion: {
+        find: (inv, btn) => inv.potions[parseInt(btn.dataset.potionidx)],
+        canBuy: (game) => game.run.potions.some(p => p === null),
+        grant: (game, item) => { game.run.potions[game.run.potions.findIndex(p => p === null)] = item.id; }
+      }
+    };
+
+    function buyShopItem(game, kind, btn) {
+      const spec = SHOP_KINDS[kind];
+      const node = game.run.map.nodes.find(n => n.id === game.run.currentNodeId);
+      if (!spec || !node || !node.shopInventory) return false;
+      const item = spec.find(node.shopInventory, btn);
+      if (!item || item.sold) return false;
+      if (game.run.gold < item.price) return false;
+      if (!spec.canBuy(game, item)) return false;
+      game.run.gold -= item.price;
+      spec.grant(game, item);
+      item.sold = true;
+      return true;
     }
 
     function applyShop(game) {
@@ -4644,8 +4725,7 @@
         if (!STATE.ui.cardRewardChoices || STATE.ui.cardRewardChoices.length === 0) STATE.ui.cardRewardChoices = generateCardReward(STATE);
       }
 
-      render();
-      saveGame(STATE);
+      refresh();
     }
 
     function generateCardReward(game) {
@@ -4688,7 +4768,7 @@
       }
       game.ui.cardRewardChoices = null;
       game.ui.combatReward = null;
-      saveGame(game);
+      // goTo() and the dispatch tail both save; a third write here was pure cost.
       goTo(SCREENS.MAP);
     }
 
@@ -4704,8 +4784,7 @@
         ui: {},
         seed: seed,
         ascension: opts.ascension || 0,
-        act: 1,
-        lastRunOptions: { characterId: opts.characterId || 'cinder-knight', ascension: opts.ascension || 0 }
+        act: 1
       };
       if (STATE.ascension >= 5) STATE.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false });
       // Choose the boss up front so the player can plan around it.
@@ -4714,7 +4793,10 @@
       STATE.run.bossName = ENEMIES_DB[STATE.run.bossId].name;
       STATE.run.map = generateMap();
       clearSave();
-      render();
+      // No render here. This leaves STATE on the MENU screen and every caller
+      // without exception navigates immediately afterwards — startGame and
+      // newRun to BOON, _autoplayRun and CINDER_DEBUG.startSeed to MAP — so
+      // drawing the menu first was a whole wasted rebuild of #app.
     }
 
     // ============ 10. RENDER ============
@@ -4899,6 +4981,7 @@
     }
 
     function renderScreen() {
+      _renderCount++;
       const app = document.getElementById('app');
 
       // Overlays (card picker / pile viewer) use the same single-render strategy.
@@ -5606,8 +5689,8 @@
       const potionsFull = STATE.run.potions.every(p => p !== null);
       const potionsHTML = potions.map((potion, i) => shopItem(potion.name, potion.price, potion.sold, !potionsFull, 'buyPotion', `data-potionidx="${i}"`, POTIONS_DB[potion.id].desc, potionIcon(potion.id))).join('');
 
-      const removalPrice = 75 + 25 * STATE.run.removalsThisRun;
-      const canRemove = gold >= removalPrice && STATE.run.deck.length > 1;
+      const removalCost = removalPrice(STATE);
+      const canRemove = gold >= removalCost && STATE.run.deck.length > 1;
 
       return `
         <div class="screen center-panel-screen">
@@ -5630,7 +5713,7 @@
               <div style="border-top: 1px solid var(--border-color); padding-top: 15px;">
                 <button class="choice-button" ${canRemove ? 'data-action="removeCard"' : ''} style="color: var(--color-danger); ${canRemove ? '' : 'opacity:0.5; cursor:default;'}">
                   <span class="choice-label">Remove a Card</span>
-                  <span class="choice-desc">Remove a card from your deck. Cost: ${icon('gold')} ${removalPrice}</span>
+                  <span class="choice-desc">Remove a card from your deck. Cost: ${icon('gold')} ${removalCost}</span>
                 </button>
               </div>
             </div>
@@ -6190,7 +6273,6 @@
 
         case 'cancelTargeting':
           cancelTargeting(STATE);
-          render();
           break;
 
         case 'applyRestChoice':
@@ -6298,55 +6380,17 @@
           break;
         }
 
-        case 'buyCard': {
-          const node = STATE.run.map.nodes.find(n => n.id === STATE.run.currentNodeId);
-          const inv = node.shopInventory.cards;
-          const idx = inv.findIndex(c => c.id === btn.dataset.cardid && !c.sold);
-          const item = inv[idx];
-          if (item && !item.sold && STATE.run.gold >= item.price) {
-            STATE.run.gold -= item.price;
-            STATE.run.deck.push({ uid: uid(), defId: item.id, upgraded: false });
-            item.sold = true;
-            render();
-          }
+        case 'buyCard':
+        case 'buyRelic':
+        case 'buyPotion':
+          buyShopItem(STATE, action, btn);
           break;
-        }
 
-        case 'buyRelic': {
-          const node = STATE.run.map.nodes.find(n => n.id === STATE.run.currentNodeId);
-          const inv = node.shopInventory.relics;
-          const item = inv.find(r => r.id === btn.dataset.relicid && !r.sold);
-          if (item && !item.sold && STATE.run.gold >= item.price && !hasRelic(STATE, item.id)) {
-            STATE.run.gold -= item.price;
-            grantRelic(STATE, item.id);
-            item.sold = true;
-            render();
-          }
-          break;
-        }
-
-        case 'buyPotion': {
-          const node = STATE.run.map.nodes.find(n => n.id === STATE.run.currentNodeId);
-          const inv = node.shopInventory.potions;
-          const item = inv[parseInt(btn.dataset.potionidx)];
-          const emptySlot = STATE.run.potions.findIndex(p => p === null);
-          if (item && !item.sold && emptySlot !== -1 && STATE.run.gold >= item.price) {
-            STATE.run.gold -= item.price;
-            STATE.run.potions[emptySlot] = item.id;
-            item.sold = true;
-            render();
-          }
-          break;
-        }
-
-        case 'removeCard': {
-          const removalPrice = 75 + 25 * STATE.run.removalsThisRun;
-          if (STATE.run.gold >= removalPrice && STATE.run.deck.length > 1) {
+        case 'removeCard':
+          if (STATE.run.gold >= removalPrice(STATE) && STATE.run.deck.length > 1) {
             STATE.ui.picker = { purpose: 'remove' };
-            render();
           }
           break;
-        }
 
         case 'pickCard': {
           const cardUid = btn.dataset.carduid;
@@ -6354,7 +6398,8 @@
           const deckIdx = STATE.run.deck.findIndex(c => c.uid === cardUid);
           if (deckIdx !== -1) {
             if (purpose === 'remove') {
-              STATE.run.gold -= (75 + 25 * STATE.run.removalsThisRun);
+              // Must read the price BEFORE incrementing the counter it depends on.
+              STATE.run.gold -= removalPrice(STATE);
               STATE.run.removalsThisRun++;
               STATE.run.deck.splice(deckIdx, 1);
               STATE.ui.picker = null;
@@ -6461,22 +6506,35 @@
       // never lingers over a screen it no longer describes.
       if (action !== 'inspect' && STATE.ui) STATE.ui.inspect = null;
 
+      _inDispatch = true;
       try {
         dispatchAction(action, btn);
-        // Safety-net re-render: combat actions (playCard/endTurn/targetEnemy)
-        // mutate state without navigating, so always redraw the current screen.
+      } catch (err) {
+        _inDispatch = false;
+        recoverFromError('click:' + action, err);
+        return;
+      }
+      _inDispatch = false;
+      // The single render+save for the whole action. Combat actions
+      // (playCard/endTurn/targetEnemy) mutate state without navigating, so this
+      // must run whether or not the action called goTo().
+      try {
         render();
         checkpoint(STATE);
       } catch (err) {
-        recoverFromError('click:' + action, err);
+        recoverFromError('click:' + action + ':render', err);
       }
     });
 
     document.addEventListener('keydown', (e) => {
+      _inDispatch = true;
       try {
         handleKeydown(e);
       } catch (err) {
         recoverFromError('keydown:' + e.key, err);
+        return;
+      } finally {
+        _inDispatch = false;
       }
     });
 
@@ -6757,6 +6815,9 @@
         // Read by tools/cdp-verify.mjs. A caught error is invisible to
         // Runtime.exceptionThrown, so the gate asserts on this too.
         errorLog: () => _errorLog.slice(),
+        // Render/save accounting. A navigating click should be exactly 1 of each.
+        counters: () => ({ renders: _renderCount, saves: _saveCount }),
+        resetCounters: () => { _renderCount = 0; _saveCount = 0; },
         // Test hook: inject a card whose custom() throws, to prove the boundary
         // rolls back rather than leaving the run half-mutated.
         injectThrowingCard: () => {
