@@ -3672,7 +3672,16 @@
       'flowing-ink': 'FI', 'mirror-shard': 'MS', 'heavy-anchor': 'HA', 'golden-needle': 'GN',
       'war-banner': 'WB', 'bone-dice': 'BD', 'vital-ember': 'VE', 'pocket-sundial': 'SD'
     };
-    for (const [rid, relic] of Object.entries(RELICS_DB)) relic.short = relic.short || RELIC_SHORTS[rid] || rid.slice(0, 2).toUpperCase();
+    // Where each relic's `short` came from. This exists because the assignment
+    // below runs at load time and always succeeds — the id-slice fallback cannot
+    // fail — so validateContent's `!relic.short` test could never once be true.
+    // The abbreviation was always present and sometimes garbage, which is not a
+    // condition a truthiness check can express. Provenance can.
+    const RELIC_SHORT_SOURCE = {};
+    for (const [rid, relic] of Object.entries(RELICS_DB)) {
+      RELIC_SHORT_SOURCE[rid] = relic.short ? 'inline' : RELIC_SHORTS[rid] ? 'table' : 'id-slice';
+      relic.short = relic.short || RELIC_SHORTS[rid] || rid.slice(0, 2).toUpperCase();
+    }
 
     // Potions are the run's panic button and its burst window. Every entry either
     // saves a turn you were going to lose or converts a good turn into a great
@@ -6158,7 +6167,10 @@
     // ============ 10. RENDER ============
 
     // ============ AUDIO ENGINE ============
-    // Music (one looping element) + SFX (cached, cloned so they overlap).
+    // Music (one looping element) + SFX (a bounded pool per key, so overlapping
+    // plays reuse players instead of allocating one). It DID clone per play, and
+    // that is the leak the post-mortem forty lines below describes; this line
+    // went on describing the broken version after it was fixed.
     // Assets live in assets/audio/. Autoplay is unlocked on the first user
     // gesture. Mute persists in localStorage.
     //
@@ -8505,9 +8517,38 @@
         if (card.hpCost != null && typeof card.hpCost !== 'number' && typeof card.hpCost !== 'function') {
           warnings.push(`Card ${id} hpCost must be a number or (upgraded)=>number`);
         }
+        // A card whose whole body is custom() but which declares no desc renders
+        // with an empty description box: describeCard has nothing to build from
+        // and returns only the keyword suffix.
+        if (card.custom && !card.desc && !(card.effects || []).length) {
+          warnings.push(`Card ${id} has custom() but no desc — its face will render blank`);
+        }
         for (const eff of (card.effects || [])) {
           if (!['DAMAGE','BLOCK','DRAW','ENERGY','HEAL','APPLY_STATUS','APPLY_SELF_STATUS'].includes(eff.type)) warnings.push(`Unsupported effect ${eff.type} on ${id}`);
           if ((eff.type === 'APPLY_STATUS' || eff.type === 'APPLY_SELF_STATUS') && !STATUS_INFO[eff.status]) warnings.push(`Unknown status ${eff.status} on ${id}`);
+          // A misspelled key is the quietest bug in the whole data layer:
+          // values['blght'] is undefined, DAMAGE deals NaN, and nothing anywhere
+          // complains — the card simply does nothing and looks like it should.
+          if (eff.key != null) {
+            if (!card.values || card.values[eff.key] == null) {
+              warnings.push(`Card ${id} effect ${eff.type} reads values.${eff.key}, which is not defined`);
+            }
+            if (card.upgradedValues && card.upgradedValues[eff.key] == null) {
+              warnings.push(`Card ${id} has upgradedValues but none for '${eff.key}' — the upgrade silently drops this effect`);
+            }
+          }
+          // Targeting traps. applyEffects fans APPLY_STATUS out on ENEMY_ALL and
+          // otherwise needs a `target`, which playCard only supplies for
+          // ENEMY_SINGLE — so APPLY_STATUS on a SELF card runs neither branch and
+          // is a silent no-op even after the Phase 10 fix. The inverse is the
+          // same shape: APPLY_SELF_STATUS always hits the player, so putting it
+          // on an enemy-targeted card reads as a debuff and is a buff.
+          if (eff.type === 'APPLY_STATUS' && card.target === 'SELF') {
+            warnings.push(`Card ${id} applies ${eff.status} to a target but is target:'SELF' — this is a silent no-op (did you mean APPLY_SELF_STATUS?)`);
+          }
+          if (eff.type === 'APPLY_SELF_STATUS' && card.target && card.target !== 'SELF' && !(card.effects || []).some(e => e.type === 'DAMAGE')) {
+            warnings.push(`Card ${id} is ${card.target} but its only status effect is APPLY_SELF_STATUS — it buffs you, not them`);
+          }
         }
       }
       for (const [id, enemy] of Object.entries(ENEMIES_DB)) {
@@ -8518,6 +8559,48 @@
         for (const token of (enemy.pattern || [])) {
           const parsed = parseIntentToken(token);
           if (parsed.type === 'UNKNOWN') warnings.push(`Unknown enemy pattern token on ${id}: ${token}`);
+        }
+        // A `pattern` enemy is fully checked above. A `getIntent` enemy was not
+        // checked at all, and getIntent is where every interesting enemy lives.
+        //
+        // They cannot be CALLED to find out: they mutate enemy.intentIndex, some
+        // read combat.enemies, and one of them (hollow-choir) latches a flag. So
+        // the source is read instead. Three kinds of literal, three rules:
+        //
+        //   type: 'X'      a dynamic intent shape -> must be a key of INTENT_DESC
+        //   cardId/enemyId  -> must exist in CARDS_DB / ENEMIES_DB. Matched as an
+        //                      EXPRESSION up to the next , or }, because the real
+        //                      ones are ternaries (grave-summoner, ashen-warden),
+        //                      not bare literals.
+        //   'ATK13'        anything else in caps -> must parse as an intent token.
+        //                  This is what catches the ['ATK18', ...] loop arrays,
+        //                  which never pass through parseIntentToken at a call
+        //                  site the linter could see.
+        //
+        // The rule this depends on: keep every NON-token string literal inside a
+        // getIntent lowercase. Enemy and card ids already are.
+        if (typeof enemy.getIntent === 'function') {
+          const src = String(enemy.getIntent);
+          const consumed = new Set();
+          for (const m of src.matchAll(/\btype:\s*'([^']*)'/g)) {
+            consumed.add(m[1]);
+            if (!INTENT_DESC[m[1]]) warnings.push(`Enemy ${id} getIntent returns unknown intent type: ${m[1]}`);
+          }
+          for (const [field, db] of [['cardId', CARDS_DB], ['enemyId', ENEMIES_DB]]) {
+            for (const m of src.matchAll(new RegExp('\\b' + field + ':([^,}]+)', 'g'))) {
+              for (const q of (m[1].match(/'([^']*)'/g) || [])) {
+                const ref = q.slice(1, -1);
+                consumed.add(ref);
+                if (!db[ref]) warnings.push(`Enemy ${id} getIntent references missing ${field}: ${ref}`);
+              }
+            }
+          }
+          for (const m of src.matchAll(/'([A-Z][A-Z0-9_-]*)'/g)) {
+            if (consumed.has(m[1])) continue;
+            if (parseIntentToken(m[1]).type === 'UNKNOWN') {
+              warnings.push(`Enemy ${id} getIntent has an unparseable intent token: ${m[1]}`);
+            }
+          }
         }
       }
       for (const [id, relic] of Object.entries(RELICS_DB)) {
@@ -8532,13 +8615,64 @@
           }
         }
       }
+      // A relic's abbreviation is what renders when it has no art, so two relics
+      // sharing one are indistinguishable in the status bar — and nothing checked.
+      const shortOwners = {};
+      for (const [rid, relic] of Object.entries(RELICS_DB)) {
+        if (RELIC_SHORT_SOURCE[rid] === 'id-slice') {
+          warnings.push(`Relic ${rid} has no declared short — it fell back to '${relic.short}' from its id`);
+        }
+        (shortOwners[relic.short] = shortOwners[relic.short] || []).push(rid);
+        if (!RELIC_ICONS[rid] && !RASTER_ICONS.has(rid)) warnings.push(`Relic ${rid} has no icon`);
+      }
+      for (const [short, owners] of Object.entries(shortOwners)) {
+        if (owners.length > 1) warnings.push(`Relic short '${short}' is shared by ${owners.join(', ')}`);
+      }
+
+      const potionRarityCounts = {};
       for (const [id, potion] of Object.entries(POTIONS_DB)) {
         if (id !== potion.id) warnings.push(`Potion key/id mismatch: ${id}`);
         if (!potion.name || !knownTargets.includes(potion.target)) warnings.push(`Potion missing/unknown target: ${id}`);
         if (typeof potion.custom !== 'function') warnings.push(`Potion ${id} has no custom() effect`);
+        if (!potion.desc) warnings.push(`Potion ${id} has no desc — the shop and the belt tooltip render empty`);
+        if (!POTION_RARITY_WEIGHTS[potion.rarity]) warnings.push(`Potion ${id} has rarity '${potion.rarity}', which POTION_RARITY_WEIGHTS does not list`);
+        else potionRarityCounts[potion.rarity] = (potionRarityCounts[potion.rarity] || 0) + 1;
+        if (!POTION_ICONS[id] && !RASTER_ICONS.has(id)) warnings.push(`Potion ${id} has no icon`);
+        // The crash class: game.combat is null on the map, so a map-usable potion
+        // that reaches into it throws rather than fizzling. Source-scanned here;
+        // the gate additionally CALLS each one with combat nulled.
+        if (potion.usableOutOfCombat && /\bgame\s*\.\s*combat\b/.test(String(potion.custom))) {
+          warnings.push(`Potion ${id} is usableOutOfCombat but its custom() touches game.combat — it will throw on the map`);
+        }
       }
+      // rollPotion picks a rarity first, then a potion within it, so an empty
+      // band is a dead branch and a one-potion band is a guaranteed repeat.
+      for (const rarity of Object.keys(POTION_RARITY_WEIGHTS)) {
+        if ((potionRarityCounts[rarity] || 0) < 2) {
+          warnings.push(`Potion rarity ${rarity} has ${potionRarityCounts[rarity] || 0} entries — rollPotion needs at least 2 per band`);
+        }
+      }
+
+      const boonIds = new Set();
       for (const boon of BOONS_DB) {
         if (!boon.id || !boon.label || typeof boon.apply !== 'function') warnings.push(`Boon missing fields: ${boon.id || 'unknown'}`);
+        if (!boon.desc) warnings.push(`Boon ${boon.id} has no desc`);
+        if (boonIds.has(boon.id)) warnings.push(`Duplicate boon id: ${boon.id}`);
+        boonIds.add(boon.id);
+        // Same optional field RELICS_DB uses — but the relic loop's validation of
+        // it lives inside the relic loop, so boons got none of it for free.
+        if (boon.characters != null) {
+          if (!Array.isArray(boon.characters) || !boon.characters.length) {
+            warnings.push(`Boon ${boon.id} characters must be a non-empty array`);
+          } else {
+            for (const cid of boon.characters) if (!CHARACTERS_DB[cid]) warnings.push(`Boon ${boon.id} references unknown character: ${cid}`);
+          }
+        }
+      }
+      // Every character must be able to fill the offer from its own pool.
+      for (const cid of Object.keys(CHARACTERS_DB)) {
+        const pool = boonPoolFor(cid).length;
+        if (pool < BOON_OFFER_SIZE) warnings.push(`Character ${cid} can only be offered ${pool} boons but the screen shows ${BOON_OFFER_SIZE}`);
       }
       // Reserved floors must name a real node type and sit inside the map.
       for (const [label, table] of [['GUARANTEED_FLOORS', GUARANTEED_FLOORS], ['GUARANTEED_FLOORS_ACT2', GUARANTEED_FLOORS_ACT2]]) {
@@ -8586,6 +8720,25 @@
           else if (!ENEMIES_DB[bossId].isBoss) warnings.push(`Act ${act} boss ${bossId} is not flagged isBoss`);
         }
       }
+      // Orphans. An enemy in no table, summoned by nobody and not a boss can
+      // never appear in a run, which is indistinguishable from an enemy that
+      // does not work — and both look exactly like a finished one in the source.
+      const reachable = new Set();
+      for (const tables of Object.values(ACT_TABLES)) {
+        for (const kind of ['encounters', 'elites']) {
+          for (const entries of Object.values(tables[kind])) for (const e of entries) for (const eid of e) reachable.add(eid);
+        }
+        for (const b of tables.bosses || []) reachable.add(b);
+      }
+      for (const enemy of Object.values(ENEMIES_DB)) {
+        if (typeof enemy.getIntent !== 'function') continue;
+        for (const m of String(enemy.getIntent).matchAll(/\benemyId:([^,}]+)/g)) {
+          for (const q of (m[1].match(/'([^']*)'/g) || [])) reachable.add(q.slice(1, -1));
+        }
+      }
+      for (const id of Object.keys(ENEMIES_DB)) {
+        if (!reachable.has(id)) warnings.push(`Enemy ${id} is in no table and is summoned by nobody — it can never appear`);
+      }
       for (const [id, ch] of Object.entries(CHARACTERS_DB)) {
         if (id !== ch.id) warnings.push(`Character key/id mismatch: ${id}`);
         for (const cardId of ch.deck) {
@@ -8604,6 +8757,35 @@
         if (commons.filter(c => c.type === CARD_TYPES.SKILL).length < 3) warnings.push(`Character ${id} pool has <3 common skills`);
         if (own.filter(c => c.type === CARD_TYPES.POWER).length < 2) warnings.push(`Character ${id} pool has <2 powers`);
         if (own.filter(c => c.rarity === CARD_RARITIES.RARE).length < 3) warnings.push(`Character ${id} pool has <3 rares`);
+        if (own.filter(c => c.rarity === CARD_RARITIES.UNCOMMON).length < 6) warnings.push(`Character ${id} pool has <6 uncommons`);
+      }
+
+      // PARITY, which is the check the floors above cannot express. The pools sat
+      // at 8/8/8, 8/7/5 and 6/7/5 for a long time and every floor was satisfied
+      // throughout: Cinder Knight had three more rares than Plague Seer and
+      // nothing anywhere said so. A floor stops a pool starving; only parity
+      // stops one class quietly becoming the deep one.
+      const classIds = Object.keys(CHARACTERS_DB);
+      for (const rarity of [CARD_RARITIES.UNCOMMON, CARD_RARITIES.RARE]) {
+        const counts = classIds.map(cid => ({
+          cid, n: Object.values(CARDS_DB).filter(c => c.character === cid && c.rarity === rarity && c.type !== CARD_TYPES.CURSE).length
+        }));
+        const lo = counts.reduce((a, b) => a.n <= b.n ? a : b);
+        const hi = counts.reduce((a, b) => a.n >= b.n ? a : b);
+        if (hi.n - lo.n > 2) {
+          warnings.push(`${rarity} pools are lopsided: ${hi.cid} has ${hi.n}, ${lo.cid} has ${lo.n} (max spread is 2)`);
+        }
+      }
+
+      // The shop's neutral slot draws from SHARED alone. It was a 6-card rotation
+      // containing zero rares, so that slot could never once show a rare in the
+      // entire history of the game, and nothing said so because "6 cards" looks
+      // like a pool rather than a rotation.
+      const sharedPool = Object.values(CARDS_DB).filter(c =>
+        c.character === 'SHARED' && c.rarity !== CARD_RARITIES.BASIC && c.type !== CARD_TYPES.CURSE);
+      if (sharedPool.length < 10) warnings.push(`SHARED rollable pool is ${sharedPool.length}; the shop's neutral slot needs >=10`);
+      if (sharedPool.filter(c => c.rarity === CARD_RARITIES.RARE).length < 2) {
+        warnings.push(`SHARED pool has <2 rares — the neutral shop slot can never show one`);
       }
       for (const event of EVENTS_DB) {
         if (!event.id || !event.choices || !event.choices.length) warnings.push(`Event missing fields: ${event.id || 'unknown'}`);
