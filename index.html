@@ -39,21 +39,37 @@
       --icon-title:     1.5rem;  /* icons flanking panel titles (was 24px) */
       --icon-portrait:  4rem;    /* enemy portrait (was 44px) — desktop has room */
 
-      /* === Solarized Light (Ethan Schoonover) === */
+      /* === Solarized Light (Ethan Schoonover), darkened for contrast ===
+         Stock Solarized accents are tuned for syntax highlighting on a light
+         ground, where they sit beside plenty of high-contrast text. Here they
+         ARE the text: --text-muted alone carries card rules text, tooltip
+         bodies, shop descriptions and the minor combat log across 40-odd
+         usages, and at #93a1a1 it measured 2.48:1 on base3 — below even the
+         3:1 large-text floor. Gold at 2.98:1 was every shop price.
+
+         Each value below is the original darkened along its own RGB ray, so
+         the hue is unchanged and the palette still reads as Solarized, until
+         it clears 4.5:1 against BOTH grounds — base3 for screens, base2 for
+         cards, panels and tooltips. Checking only base3 would have left every
+         card face marginal, which is where the rules text actually lives.
+         tools/cdp-verify.mjs asserts the computed values, so this cannot rot.
+
+         Measured (base3 / base2), all >= 4.5:1 except the border, which is a
+         non-text UI boundary and takes the 3:1 target instead. */
       --bg-dark: #fdf6e3;        /* base3  — main background */
       --bg-panel: #eee8d5;       /* base2  — panels / cards */
-      --text-primary: #586e75;   /* base01 — primary text */
-      --text-muted: #93a1a1;     /* base1  — muted text */
-      --border-color: #b6b193;   /* softened base2/base1 border */
-      --color-attack: #dc322f;   /* red */
-      --color-skill: #268bd2;    /* blue */
-      --color-power: #b58900;    /* yellow */
-      --color-block: #2aa198;    /* cyan (block) */
-      --color-heal: #859900;     /* green (heal / HP) */
-      --color-danger: #dc322f;   /* red */
-      --color-gold: #b58900;     /* yellow */
-      --color-elite: #cb4b16;    /* orange */
-      --color-relic: #6c71c4;    /* violet */
+      --text-primary: #576c73;   /* was #586e75 — 5.13 / 4.51 */
+      --text-muted: #616a6a;     /* was #93a1a1 (2.48!) — 5.15 / 4.54 */
+      --border-color: #89856f;   /* was #b6b193 (2.01) — 3.45 / 3.03 */
+      --color-attack: #c52d2a;   /* red     — 5.15 / 4.53 */
+      --color-skill: #1e6da5;    /* blue    — 5.14 / 4.53 */
+      --color-power: #846400;    /* yellow  — 5.12 / 4.51 */
+      --color-block: #1e746e;    /* cyan    — 5.15 / 4.54 */
+      --color-heal: #616f00;     /* green   — 5.15 / 4.53 */
+      --color-danger: #c52d2a;   /* red     — 5.15 / 4.53 */
+      --color-gold: #846400;     /* yellow  — 5.12 / 4.51 */
+      --color-elite: #b64314;    /* orange  — 5.12 / 4.51 */
+      --color-relic: #5e62aa;    /* violet  — 5.12 / 4.51 */
 
       /* Reserved gutter on the right of the status bar so it clears #mute-btn,
          which is a fixed overlay outside #app. */
@@ -700,9 +716,15 @@
       color: var(--color-gold);
     }
 
+    /* "You still have energy to spend." This used to override only the border
+       and the text, leaving the base rule's blue background underneath — gold
+       on blue measured 1.15:1, so the warning has been invisible for its whole
+       life. It recolours the whole button now, which is also what actually
+       reads as a warning at a glance. */
     .end-turn-btn.warn {
+      background: var(--color-gold);
       border-color: var(--color-gold);
-      color: var(--color-gold);
+      color: var(--bg-dark);
     }
 
     /* Enemy portrait. Combat used to show nothing but a name and a bar, while
@@ -1733,6 +1755,51 @@
     /* Transient combat effect sprites (pixel-art), layered above everything, click-through. */
     #fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
     .fx-sprite { position: fixed; image-rendering: pixelated; pointer-events: none; will-change: transform, opacity; }
+
+    /* === Reduced motion ===
+       Honours the OS setting; Phase 8 adds a manual toggle that sets
+       .reduced-motion on <body> and reuses these same rules.
+
+       Two things here are deliberate and easy to get wrong:
+
+       1. .map-node's `transform: translate(-50%, -50%)` is LAYOUT, not motion —
+          it is how a node centres on its coordinate. A blanket `transform: none`
+          teleports every node up-left by half its size and the whole map
+          visibly misaligns. Only the scale() on top of it may go, so the hover
+          rule is restated with the translate kept.
+
+       2. Killing float-up is only safe because spawnFloatingNumber() already
+          backs its animationend listener with a 1200ms setTimeout removal
+          (see section 4). Without that fallback, `animation: none` means the
+          event never fires and every damage number stays on screen forever.
+
+       The JS frame-sequence sprites in #fx-layer are motion by construction, so
+       they are hidden outright rather than slowed. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+      .map-edge.reachable { animation: none; }
+      .map-node.available:hover { transform: translate(-50%, -50%); }   /* keep the centring, drop the scale */
+      .card:hover { transform: none; }                                  /* .card has no layout transform */
+      .floating-number { animation: none; opacity: 1; }
+      #fx-layer { display: none; }
+    }
+
+    /* Manual override (Phase 8 settings). Same rules, same caveats. */
+    body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    body.reduced-motion .map-edge.reachable { animation: none; }
+    body.reduced-motion .map-node.available:hover { transform: translate(-50%, -50%); }
+    body.reduced-motion .card:hover { transform: none; }
+    body.reduced-motion .floating-number { animation: none; opacity: 1; }
+    body.reduced-motion #fx-layer { display: none; }
 
     /* Hover tooltip. Lives outside #app so render() never destroys it, and is
        pointer-events:none because a hoverable tooltip would sit under the cursor
