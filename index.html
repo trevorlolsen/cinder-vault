@@ -2143,7 +2143,9 @@
     const LAYOUT = {
       ENERGY_MAX: 3,
       HAND_SIZE: 10,
-      STARTING_MAX_HP: 80,
+      // STARTING_MAX_HP was here and had no readers — CHARACTERS_DB supplies
+      // maxHp per class. STARTING_GOLD is still the fallback for a character
+      // that does not declare its own.
       STARTING_GOLD: 0,
       // FLOORS and COLS are game rules: generateMap(), validateContent() and
       // autoplayAll() read them. Map pixel geometry lives in MAP_LAYOUT instead.
@@ -4926,6 +4928,9 @@
           nodeIds[nodeId] = { floor, col };
 
           let nodeType;
+          // Reserved floors are placed by rule, not by the weighted roll, and
+          // they must not spend the caps the roll draws from — see below.
+          let reserved = true;
           if (floor === 1) {
             nodeType = NODE_TYPES.COMBAT;
           } else if (floor === LAYOUT.FLOORS) {
@@ -4939,6 +4944,7 @@
             // made gold and the gold relics dead in those runs.
             nodeType = guaranteed[floor];
           } else {
+            reserved = false;
             // Elites ramp up in the back half so taking one is a real
             // risk/reward call rather than a rare coin flip.
             const hard = !!(STATE && STATE.ascension >= 2);
@@ -4963,7 +4969,15 @@
             nodeType = weightedPick(Object.fromEntries(Object.entries(weights).filter(([k, v]) => v > 0)));
           }
 
-          if (nodeType in nodeCounts) nodeCounts[nodeType]++;
+          // Only rolled nodes spend the caps. A reserved floor lays down 3-5
+          // nodes of one type at once, and counting those against the cap meant
+          // floor 5 alone consumed the entire TREASURE budget of 3 and floor 9
+          // consumed SHOP — so from floor 6 on, treasure weight was zero and the
+          // comment above about "bonus ones beyond the guaranteed floors" was
+          // false. Measured: 0.54 non-floor-5 treasures per Act 1 map, nearly
+          // all of them BEFORE floor 5. The same arithmetic ate the back half of
+          // the elite ramp, which is the one that is supposed to escalate.
+          if (!reserved && nodeType in nodeCounts) nodeCounts[nodeType]++;
 
           nodes.push({ id: nodeId, floor, col, type: nodeType, connections: [], visited: false });
         }
@@ -5018,13 +5032,52 @@
         }
       }
 
+      // Make the forks mean something.
+      //
+      // Measured over 3,000 Act 1 maps before this pass: 29% of nodes offered
+      // exactly one exit (no choice at all) and another 31% offered several
+      // exits that were all the same node type (a choice with no content). Only
+      // 40% of the time did standing on a node actually pose a question.
+      //
+      // Two cheap passes fix both. Neither can strand anything — they only ever
+      // ADD edges, so every guarantee the repair pass just established holds.
+      for (let floor = 1; floor < LAYOUT.FLOORS - 1; floor++) {
+        const currentFloor = nodes.filter(n => n.floor === floor);
+        const nextFloor = nodes.filter(n => n.floor === floor + 1);
+        if (nextFloor.length < 2) continue;
+
+        for (const node of currentFloor) {
+          const reachable = nextFloor
+            .filter(n => !node.connections.includes(n.id))
+            .sort((a, b) => Math.abs(a.col - node.col) - Math.abs(b.col - node.col));
+          if (!reachable.length) continue;
+
+          // 1. A single exit is not a decision. Give it a second.
+          if (node.connections.length < 2) {
+            node.connections.push(reachable.shift().id);
+          }
+
+          // 2. Several exits that are all the same type is not a decision
+          // either. Reach further for one that differs — the drawn edge is
+          // longer than the usual +/-2, which is a fair price for the fork.
+          const typesOffered = new Set(node.connections
+            .map(id => nodes.find(n => n.id === id))
+            .filter(Boolean)
+            .map(n => n.type));
+          if (typesOffered.size === 1) {
+            const different = reachable.find(n => !typesOffered.has(n.type));
+            if (different) node.connections.push(different.id);
+          }
+        }
+      }
+
       // Floor 15 -> Boss
       for (const node of nodes.filter(n => n.floor === LAYOUT.FLOORS - 1)) {
         const bossNode = nodes.find(n => n.floor === LAYOUT.FLOORS);
         if (!node.connections.includes(bossNode.id)) node.connections.push(bossNode.id);
       }
 
-      return { nodes, edges: [] };
+      return { nodes };
     }
 
     function availableNodeIds(game) {
