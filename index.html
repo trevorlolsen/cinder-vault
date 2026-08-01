@@ -3250,11 +3250,15 @@
       },
       'guardian': {
         id: 'guardian', name: 'Stone Guardian', maxHp: 50,
-        // Turtles up the moment you start scaling Might, so stacking buffs has a
-        // cost: it buys the Guardian free defensive turns.
+        // Turtles harder as you scale Might — two guards per swing instead of
+        // one — but it never stops swinging. It used to return BLOCK8
+        // unconditionally and forever once you hit 2 Might, which turned a
+        // 50 HP threat into a zero-risk grind the moment a Knight played one
+        // Seething Rage: the punishment for stacking buffs was that nothing
+        // could ever hurt you again. That rewarded the exact thing it taxed.
         getIntent: (enemy, combat) => {
           const turn = enemy.intentIndex++;
-          if ((combat.player.statuses.might || 0) >= 2) return parseIntentToken('BLOCK8');
+          if ((combat.player.statuses.might || 0) >= 2) return parseIntentToken(turn % 3 === 2 ? 'ATK10' : 'BLOCK8');
           return parseIntentToken(turn % 2 === 0 ? 'BLOCK8' : 'ATK10');
         }
       },
@@ -3268,8 +3272,12 @@
           return { type: 'ATTACK', value: 6 + Math.min(8, (combat._playsThisTurn || 0) * 2) };
         }
       },
+      // The most frequently SUMMONED body in the game — Grave Summoner, Hollow
+      // Conductor and Ashen Warden all reach for it — and its pattern was the
+      // same token five times, so the enemy that shows up most often had no
+      // behaviour at all. It now has a rhythm worth reading.
       'wraith': {
-        id: 'wraith', name: 'Twisted Wraith', maxHp: 28, pattern: ['ATK5', 'ATK5', 'ATK5', 'ATK5', 'ATK5']
+        id: 'wraith', name: 'Twisted Wraith', maxHp: 28, pattern: ['ATK5', 'ATK7', 'BLOCK6', 'ATK5', 'ATK9']
       },
       'molten-egg': {
         id: 'molten-egg', name: 'Molten Egg', maxHp: 20, pattern: ['ATK6', 'BLIGHT3', 'ATK6'],
@@ -3332,10 +3340,15 @@
       },
       'chanter': {
         id: 'chanter', name: 'Robed Chanter', maxHp: 55, isElite: true,
-        getIntent: (enemy, combat) => {
-          const mightLevel = enemy.statuses.might || 0;
-          if (mightLevel >= 2) return { type: 'ATTACK', value: 16 };
-          return { type: 'BUFF_MIGHT', value: 3 };
+        // Buffs once, then cycles. It used to buff once and return a flat
+        // ATK16 every turn for the rest of the fight — a 55 HP elite with one
+        // static number, and the only enemy whose intentIndex never moved.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if ((enemy.statuses.might || 0) < 2) return { type: 'BUFF_MIGHT', value: 3 };
+          if (turn % 4 === 1) return parseIntentToken('BLOCK12');
+          if (turn % 4 === 3) return parseIntentToken('SAPPED2');
+          return parseIntentToken('ATK16');
         }
       },
       'warden': {
@@ -3437,11 +3450,14 @@
       },
       'vault-sentinel': {
         id: 'vault-sentinel', name: 'Vault Sentinel', maxHp: 62,
-        // The Stone Guardian's lesson at Act 2 prices, and it reads YOUR Might —
-        // a Cinder Knight who opened on buffs has bought it free defensive turns.
+        // The Stone Guardian's lesson at Act 2 prices: under Might pressure it
+        // spends two turns of every three defending rather than attacking, but
+        // it keeps its rhythm. Same fix, same reason — see guardian.
         getIntent: (enemy, combat) => {
           const turn = enemy.intentIndex++;
-          if ((combat.player.statuses.might || 0) >= 3) return parseIntentToken('BLOCK14');
+          if ((combat.player.statuses.might || 0) >= 3) {
+            return parseIntentToken(turn % 3 === 1 ? 'ATK14' : (turn % 3 === 2 ? 'SAPPED2' : 'BLOCK14'));
+          }
           return parseIntentToken(turn % 3 === 2 ? 'SAPPED2' : 'ATK14');
         }
       },
@@ -3576,8 +3592,12 @@
       },
       'ember-charm': {
         id: 'ember-charm', name: 'Ember Charm',
-        // Overwhelm is the only card that applies Exposed, and it's Knight-only.
-        characters: ['cinder-knight'],
+        // Unscoped. That comment used to read "Overwhelm is the only card that
+        // applies Exposed, and it's Knight-only" and was true when written —
+        // but Phase 10 gave the Plague Seer two Exposed cards (Sap Strength and
+        // Prophet's Toll, the latter hitting every enemy for 3-4) against the
+        // Knight's one. So the relic was locked to the class that could barely
+        // use it AND weighted down to a quarter for the class that could.
         description: 'Exposed you apply is 1 stack stronger.',
         modifyStatusApply: (game, stacks, status) => status === 'exposed' ? stacks + 1 : stacks
       },
@@ -3649,10 +3669,17 @@
         onCombatEnd: (game) => { game.run.gold += 15; }
       },
       // --- New relics (enabled by the hook system) ---
+      // The shell, not just less Warded. This was Heavy Anchor with a smaller
+      // number and nothing else — one relic printed twice. The block makes it
+      // the better turn-one relic; the Anchor is the better long-fight one.
       'iron-tortoise': {
         id: 'iron-tortoise', name: 'Iron Tortoise',
-        description: 'At the start of combat, gain 2 Warded.',
-        onCombatStart: (game) => { applyPlayerStatus(game, game.combat.player, 'warded', 2); combatLog(game, 'you', 'relic', 'Iron Tortoise grants 2 Warded.', { minor: true }); }
+        description: 'At the start of combat, gain 2 Warded and 6 block.',
+        onCombatStart: (game) => {
+          applyPlayerStatus(game, game.combat.player, 'warded', 2);
+          gainBlock(game.combat.player, 6);
+          combatLog(game, 'you', 'relic', 'Iron Tortoise grants 2 Warded and 6 block.', { minor: true });
+        }
       },
       'thornmail': {
         id: 'thornmail', name: 'Thornmail',
@@ -3794,8 +3821,11 @@
     const POTIONS_DB = {
       // --- Defensive / recovery ---
       'focus-tonic': { id: 'focus-tonic', name: 'Sudden Focus', rarity: 'COMMON', target: 'SELF', desc: 'Gain 12 block.', custom: (game) => { gainBlock(game.combat.player, 12); } },
-      'vigor': { id: 'vigor', name: 'Vigor Tonic', rarity: 'COMMON', target: 'SELF', usableOutOfCombat: true, desc: 'Heal 5 HP.', custom: (game) => { healRun(game, 5, 'Vigor Tonic'); } },
-      'second-breath': { id: 'second-breath', name: 'Second Breath Elixir', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true, desc: 'Heal 8 HP.', custom: (game) => { healRun(game, 8, 'Second Breath'); } },
+      // Heal 5 and heal 8 were the same potion at two rarities, and both were
+      // rounding errors against a rest site that heals 24. A potion slot is a
+      // real cost; the number has to be worth spending one on.
+      'vigor': { id: 'vigor', name: 'Vigor Tonic', rarity: 'COMMON', target: 'SELF', usableOutOfCombat: true, desc: 'Heal 10 HP.', custom: (game) => { healRun(game, 10, 'Vigor Tonic'); } },
+      'second-breath': { id: 'second-breath', name: 'Second Breath Elixir', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true, desc: 'Heal 22 HP.', custom: (game) => { healRun(game, 22, 'Second Breath'); } },
       'ward-flask': {
         id: 'ward-flask', name: 'Ward Flask', rarity: 'UNCOMMON', target: 'SELF', desc: 'Gain 3 Warded.',
         custom: (game) => { applyPlayerStatus(game, game.combat.player, 'warded', 3); }
@@ -3818,9 +3848,12 @@
         id: 'fire-bomb', name: 'Fire Bomb', rarity: 'UNCOMMON', target: 'SELF', desc: 'Deal 16 damage to ALL enemies.',
         custom: (game) => { for (const e of game.combat.enemies.filter(x => x.alive)) dealDamage(game, game.combat.player, e, 16); }
       },
+      // Blight decays by one per tick, so N stacks deal N+(N-1)+...+1 — it is
+      // triangular, not linear. Nine stacks was 45 unavoidable, block-ignoring
+      // damage on a COMMON, against Blazing Draught's 18 blockable. Six is 21.
       'blight-vial': {
-        id: 'blight-vial', name: 'Blight Vial', rarity: 'COMMON', target: 'ENEMY_SINGLE', desc: 'Apply 9 Blight to an enemy.',
-        custom: (game, target) => { if (target) applyPlayerStatus(game, target, 'blight', 9); }
+        id: 'blight-vial', name: 'Blight Vial', rarity: 'COMMON', target: 'ENEMY_SINGLE', desc: 'Apply 6 Blight to an enemy.',
+        custom: (game, target) => { if (target) applyPlayerStatus(game, target, 'blight', 6); }
       },
 
       // --- Control ---
@@ -3865,10 +3898,13 @@
       //
       // These four touch game.run ONLY. That is the whole rule, and the gate
       // enforces it by calling every usableOutOfCombat potion with combat nulled.
+      // 75, not 40. The shop prices potions at 40-59, so a shop stocking this
+      // one was offering to sell you forty gold for fifty — a purchase that
+      // could not be correct at any price it was ever offered at.
       'coin-purse': {
         id: 'coin-purse', name: 'Cutpurse Draught', rarity: 'COMMON', target: 'SELF', usableOutOfCombat: true,
-        desc: 'Gain 40 gold.',
-        custom: (game) => { game.run.gold += 40; }
+        desc: 'Gain 75 gold.',
+        custom: (game) => { game.run.gold += 75; }
       },
       'whetting-oil': {
         id: 'whetting-oil', name: 'Whetting Oil', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true,
@@ -3880,8 +3916,12 @@
         desc: 'Gain 4 max HP and heal the same.',
         custom: (game) => { gainMaxHp(game, 4, true); }
       },
+      // UNCOMMON, not RARE. Curses only enter a run through A5, four event
+      // choices, the Mirror Thief and the Arch-Lich, so in a clean run this is
+      // a potion that does nothing — and it was occupying one of only three
+      // rare slots to do it.
       'solvent': {
-        id: 'solvent', name: 'Vault Solvent', rarity: 'RARE', target: 'SELF', usableOutOfCombat: true,
+        id: 'solvent', name: 'Vault Solvent', rarity: 'UNCOMMON', target: 'SELF', usableOutOfCombat: true,
         // The only repeatable curse removal in the game that is not a shop
         // purchase on a rising price ladder.
         desc: 'Remove one curse from your deck.',
@@ -4048,11 +4088,19 @@
           game.run.hp = Math.min(game.run.hp, game.run.maxHp);
         }
       },
+      // Was "add two Guards and one Slash" — three copies of the weakest cards
+      // in the game, stuffed into a ten-card deck. It was the only boon in the
+      // table with negative expected value: it made every draw worse, forever,
+      // and the Knight is the class that can least afford a diluted deck. Its
+      // siblings hand the Seer two Poison Darts (which its starting relic
+      // multiplies) and the Tinker two Scouts (which thin by cycling).
+      //
+      // Now it does what the name always suggested: it opens the fight.
       {
-        id: 'siege-drill', label: 'Siege Drill', desc: 'Add two Guards and one Slash to your deck.',
+        id: 'siege-drill', label: 'Siege Drill', desc: 'Add an Iron Stance and a Reckless Blow to your deck.',
         characters: ['cinder-knight'],
         apply: (game) => {
-          for (const defId of ['guard', 'guard', 'slash']) {
+          for (const defId of ['iron-stance', 'reckless-blow']) {
             game.run.deck.push({ uid: uid(), defId, upgraded: false });
           }
         }
@@ -4089,6 +4137,14 @@
     }
 
     const CHARACTERS_DB = {
+      // Deliberately unchanged. The v7 handoff flagged this starter as a tier
+      // below the other two, on autoplay numbers of 9.2 against 11.6 and 14.3 —
+      // but those came from a bot that refused every card reward, so they
+      // measured starting decks and the Knight is the class whose identity
+      // arrives entirely through rewards. With the bot fixed in Phase 4 the
+      // three classes measured 12.6 / 12.1 / 12.5, and Old Locket — which had
+      // never once granted its block — started working in Phase 2. There is no
+      // longer a deficiency here to correct, so nothing here is corrected.
       'cinder-knight': {
         id: 'cinder-knight', name: 'Cinder Knight', maxHp: 80, gold: 0,
         relics: ['old-locket'],
@@ -5061,9 +5117,20 @@
         ['warden'], ['pyromancer'], ['chanter'], ['mirror-thief'], ['cinder-ordinator'],
         ['ash-vicar', 'warden'], ['chanter', 'ashhound']
       ],
+      // An elite node should not be a smaller fight than the ordinary combat
+      // node beside it. Act 1's late band was: solo elites ran 62-88 HP against
+      // a 94 HP median regular encounter — the Mirror Thief at 62 was two
+      // thirds of a normal fight while charging a relic, 60-85 gold, 2 max HP
+      // and a potion roll for the privilege.
+      //
+      // Only the undersized ones are escorted, and the two biggest still come
+      // alone. Elites hit harder per body than trash does, so matching the
+      // regular median outright overshoots — the bar here is roughly 85% of it.
       late: [
-        ['pyromancer'], ['leviathan'], ['warden'], ['slag-titan'], ['mirror-thief'],
-        ['hollow-conductor'], ['ash-vicar', 'pyromancer'], ['cinder-ordinator', 'chanter']
+        ['slag-titan'], ['leviathan'],
+        ['pyromancer', 'ashhound'], ['warden', 'wraith'],
+        ['mirror-thief', 'ashhound'], ['hollow-conductor', 'ashhound'],
+        ['ash-vicar', 'pyromancer'], ['cinder-ordinator', 'chanter']
       ]
     };
 
@@ -5100,8 +5167,14 @@
         ['ash-vicar', 'furnace-warden'], ['cinder-ordinator', 'vault-sentinel'],
         ['hollow-conductor', 'emberling']
       ],
+      // Same rule as Act 1's late band, at Act 2 weights. The median regular
+      // fight down here is 122 HP, so a lone 66 HP Hollow Conductor was barely
+      // half an ordinary encounter — and Act 2's elite spread ran 66 to 146,
+      // a 2.2x swing between two nodes that look identical on the map and pay
+      // exactly the same.
       late: [
-        ['mirrorplate-golem'], ['leviathan'], ['hollow-conductor'],
+        ['mirrorplate-golem', 'ash-swarm'], ['leviathan', 'emberling'],
+        ['hollow-conductor', 'slagbeast'],
         ['furnace-warden', 'ash-vicar'], ['slag-titan', 'emberling'],
         ['mirrorplate-golem', 'vault-sentinel'], ['cinder-ordinator', 'slagbeast'],
         ['furnace-warden', 'hollow-acolyte', 'ash-swarm']
