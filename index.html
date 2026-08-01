@@ -1767,6 +1767,16 @@
     .floating-number.floating-dmg { color: var(--color-danger); }
     .floating-number.floating-block { color: var(--color-block); }
     .floating-number.floating-heal { color: var(--color-heal); }
+    /* Status floats carry the name, not just a number, so they read at a glance
+       ("+3 Blight"). Smaller than a damage figure — they are context, not the
+       headline — and deliberately neither red nor green, so a debuff landing is
+       never mistaken for damage dealt or healing. Both tokens are contrast-gated. */
+    .floating-number.floating-status {
+      font-size: var(--fs-md);
+      color: var(--color-relic);
+      letter-spacing: 0.02em;
+    }
+    .floating-number.floating-status.status-buff { color: var(--color-block); }
 
     @keyframes float-up {
       0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
@@ -1995,6 +2005,10 @@
     .menu-tagline    { font-size: var(--fs-sm); color: var(--text-muted); text-align: center; margin-top: 20px; }
     .energy-label    { font-size: var(--fs-xs); color: var(--text-muted); text-align: center; }
     .pile-row        { font-size: var(--fs-md); color: var(--text-muted); }
+    /* combat.turnNum existed but surfaced only as a heading inside the combat
+       log, which collapses to 5rem at the 1000x660 minimum — so the turn number
+       was effectively behind a scroll. It belongs in the dock. */
+    .turn-counter    { color: var(--text-primary); font-weight: bold; margin-right: 0.5rem; }
     .active-powers   { font-size: var(--fs-sm); color: var(--text-muted); }
     .targeting-hint  { font-size: var(--fs-sm); color: var(--color-gold); }
     .shop-item-desc  { font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 6px; }
@@ -4782,6 +4796,37 @@
     // one synchronous enemy turn need to know about each other.
     let _floatFanout = 0, _floatFanoutReset = null;
 
+    // A status landing, said out loud. Deliberately NOT routed through
+    // spawnFloatingNumber: that function plays a hit/block/heal sound on every
+    // call, and a card applying four statuses would fire four sound effects.
+    // Statuses are silent by design — the card that applied them already made
+    // its noise. Everything else about the contract is copied exactly: deferred
+    // to after render, anchored, into #fx-layer, and removed by BOTH
+    // animationend and a timeout backstop, because reduced-motion sets
+    // `animation: none` and animationend then never fires.
+    function spawnStatusFloat(targetKey, text, isBuff) {
+      setTimeout(() => {
+        const rect = anchorRect(targetKey);
+        if (!rect) return;
+        const el = document.createElement('div');
+        el.className = 'floating-number floating-status' + (isBuff ? ' status-buff' : '');
+        el.textContent = text;
+        const step = _floatFanout++;
+        if (_floatFanoutReset == null) {
+          _floatFanoutReset = setTimeout(() => { _floatFanout = 0; _floatFanoutReset = null; }, 250);
+        }
+        const spread = step === 0 ? 0 : (step % 2 ? 1 : -1) * Math.ceil(step / 2) * 34;
+        el.style.left = (rect.left + rect.width / 2 + spread) + 'px';
+        // Lower in the panel than damage numbers so a hit and the status it
+        // applied do not land on the same pixel.
+        el.style.top = (rect.top + rect.height * 0.62 - step * 6) + 'px';
+        el.style.animationDelay = (step * 70) + 'ms';
+        fxLayer().appendChild(el);
+        el.addEventListener('animationend', () => el.remove());
+        setTimeout(() => el.remove(), 1400 + step * 70);
+      }, 0);
+    }
+
     function spawnFloatingNumber(targetKey, text, kind) {
       // Audio cue per kind. 'heal' was added in Phase 6 — heal.mp3 shipped with
       // no call site at all, so healing had been silent since it was recorded.
@@ -6158,11 +6203,23 @@
         total = Math.max(0, applyRelicModifier(STATE, 'modifyBlockGain', total, { base: amount }));
       }
       entity.block += total;
-      // Shield-orb feedback only when the player gains block (not enemies, not combat-start relics before render).
-      if (STATE && STATE.combat && entity === STATE.combat.player) playEffect('player', 'block');
+      // Say how much. There was a shield orb and no number, so playing Guard for
+      // 12 showed a sprite and a silently-changed figure in the dock — and an
+      // ENEMY gaining block showed nothing at all, which made a turtling
+      // Guardian look like it was doing nothing rather than out-blocking you.
+      if (STATE && STATE.combat && total > 0) {
+        const isPlayer = entity === STATE.combat.player;
+        if (isPlayer) playEffect('player', 'block');
+        spawnFloatingNumber(isPlayer ? 'player' : entity.uid, `+${total}`, 'block');
+      }
     }
 
     const DEBUFF_STATUSES = ['sapped', 'exposed', 'blight', 'brittle'];
+
+    // Which side of the fight a status is on. Buffs float cyan, debuffs violet,
+    // regardless of who they land on — the colour says what the status IS, and
+    // the anchor says who got it.
+    const BUFF_STATUSES = ['might', 'warded', 'grace', 'mending', 'aegis'];
 
     function applyStatus(entity, statusName, stacks) {
       if (!entity || !entity.statuses || !statusName || !stacks) return;
@@ -6182,6 +6239,18 @@
       }
       if (!entity.statuses[statusName]) entity.statuses[statusName] = 0;
       entity.statuses[statusName] += stacks;
+
+      // Say so. Applying three Blight used to look exactly like a whiffed card:
+      // the chip changed on the next render and nothing else happened at all.
+      // Statuses are a third of this game's verbs and they were the only third
+      // with no feedback. No `game` in scope here — same STATE read gainBlock
+      // already uses for its FX.
+      if (STATE && STATE.combat && stacks > 0) {
+        const isPlayer = entity === STATE.combat.player;
+        const label = (STATUS_INFO[statusName] && STATUS_INFO[statusName].label) || statusName;
+        spawnStatusFloat(isPlayer ? 'player' : entity.uid, `+${stacks} ${label}`,
+          BUFF_STATUSES.includes(statusName));
+      }
     }
 
     function applyPlayerStatus(game, entity, statusName, stacks) {
@@ -6201,6 +6270,11 @@
         else entity.hp = Math.min(entity.maxHp, entity.hp + heal);
         combatLog(game, isPlayer ? 'you' : 'foe', 'tick',
           `${isPlayer ? 'You heal' : entity.name + ' heals'} ${heal} from Mending.`, { minor: true });
+        // Ticks write hp directly rather than going through healRun/dealDamage,
+        // so they used to bypass the float entirely and surface only as a
+        // de-emphasised log line in a panel that collapses to 5rem at the
+        // minimum window. A third of the damage in a Blight run was invisible.
+        spawnFloatingNumber(isPlayer ? 'player' : entity.uid, `+${heal}`, 'heal');
         entity.statuses.mending--;
         if (entity.statuses.mending <= 0) delete entity.statuses.mending;
       }
@@ -6209,8 +6283,11 @@
         const dmg = entity.statuses.blight;
         combatLog(game, isPlayer ? 'foe' : 'you', 'tick',
           `${isPlayer ? 'You take' : entity.name + ' takes'} ${dmg} Blight damage.`, { minor: true });
+        spawnFloatingNumber(isPlayer ? 'player' : entity.uid, `-${dmg}`, 'dmg');
+        flashTarget(isPlayer ? 'player' : entity.uid);
         if (isPlayer) {
           game.run.hp = Math.max(0, game.run.hp - dmg);
+          shakeScreen(dmg);
         } else {
           entity.hp -= dmg;
           if (entity.hp <= 0) {
@@ -7703,6 +7780,7 @@
 
                 <div class="dock-center">
                   <div class="pile-row">
+                    <span class="turn-counter">Turn ${STATE.combat.turnNum}</span>
                     Hand (${hand.length}/${LAYOUT.HAND_SIZE})
                     <button class="inline-chip-button" data-action="viewPile" data-pile="drawPile">Draw ${STATE.combat.drawPile.length}</button>
                     <button class="inline-chip-button" data-action="viewPile" data-pile="discardPile">Discard ${STATE.combat.discardPile.length}</button>
