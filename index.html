@@ -201,13 +201,21 @@
       grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
       gap: 1.25rem;
       text-align: left;
-      margin: 1.25rem 0;
+      /* 1.25rem -> 0.75rem, for the same reason .menu-subtitle's gap came down:
+         the menu clears the 660px floor with almost nothing spare, and a
+         decorative gap is a better thing to spend than a row of real content. */
+      margin: 0.75rem 0;
     }
 
+    /* Padding is 0.75rem, not 0.875rem, and it is load-bearing: adding the
+       stats row put the menu panel 19px over the 660px floor and turned the
+       whole screen into a scroller. The gate cannot catch that — .menu-screen is
+       a legitimate scroll container and therefore always in `clipped` — so it is
+       caught by measuring, and by looking at the screenshots. */
     .menu-character {
       border: 1px solid var(--border-color);
       background: var(--bg-dark);
-      padding: 0.875rem;
+      padding: 0.75rem;
     }
 
     .menu-character-name { font-weight: bold; margin-bottom: 0.25rem; }
@@ -1262,6 +1270,22 @@
       word-break: break-word;
     }
 
+    /* Rarity was invisible everywhere: the border colour encodes TYPE, and card
+       reward, shop and the pile viewer gave no rarity signal at all — shop price
+       was the only proxy. Shape AND colour, never colour alone, so it survives
+       deuteranopia; the tooltip spells the word out. Commons carry no badge,
+       which keeps the common case uncluttered and makes the rare ones pop. */
+    .card-rarity {
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      font-size: var(--fs-sm);
+      line-height: 1;
+      pointer-events: none;
+    }
+    .card-rarity.uncommon { color: var(--color-skill); }
+    .card-rarity.rare     { color: var(--color-relic); }
+
     .card.attack {
       border-left: 3px solid var(--color-attack);
     }
@@ -1726,11 +1750,23 @@
       background: var(--bg-panel);
     }
 
+    /* An <h1>, matching Victory's. It was a bare <div>, so the defeat screen was
+       the one screen in the game with no top-level heading. */
     .gameover-title {
       font-size: var(--fs-2xl);
       color: var(--color-danger);
-      margin-bottom: 20px;
+      margin: 0 0 20px;
     }
+
+    /* The final deck + relic tray on the ending screens. */
+    .run-artifact {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .run-artifact .relic-tray { justify-content: center; flex-wrap: wrap; }
 
     .stats-box {
       background: var(--bg-dark);
@@ -2000,7 +2036,22 @@
     /* Classes replacing inline font-size styles in the render templates, so every
        size in the game comes from the --fs-* scale and the <12px audit in
        tools/cdp-verify.mjs cannot be dodged by an inline style. */
-    .menu-blurb      { font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 6px; }
+    .menu-blurb      { font-size: var(--fs-sm); color: var(--text-muted); margin-bottom: 2px; }
+    /* One line, and a real <button> so the keyboard audit reaches its tooltip —
+       which is where the starting deck and relic rules actually live. */
+    .menu-character-stats {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      margin-bottom: 0;
+      font-family: inherit;
+      font-size: var(--fs-sm);
+      color: var(--text-primary);
+      text-align: center;
+      cursor: help;
+    }
     .asc-text        { font-size: var(--fs-sm); color: var(--text-muted); }
     .menu-tagline    { font-size: var(--fs-sm); color: var(--text-muted); text-align: center; margin-top: 20px; }
     .energy-label    { font-size: var(--fs-xs); color: var(--text-muted); text-align: center; }
@@ -6968,15 +7019,36 @@
       const ascMax = Math.max(0, meta.highestAscensionUnlocked || 0);
       const shownAscensions = Array.from({ length: Math.min(ascMax, ASCENSION_MAX) + 1 }, (_, i) => i);
       const ascensionText = ASCENSIONS.slice(0, Math.max(0, ascMax)).map(a => `A${a.level}: ${a.name}`).join(' · ');
-      const characterButtons = Object.values(CHARACTERS_DB).map(ch => `
+      // CHARACTERS_DB carries maxHp, starting gold, a starting relic and a
+      // ten-card deck, and the menu showed none of it — you picked a class off
+      // one line of flavour text. The visible line stays to ONE row because the
+      // menu is what the 1000x660 floor is measured against and a seed row once
+      // broke it by 12px; the deck list and the relic's rules text go in the
+      // tooltip, which costs no layout at all.
+      const characterButtons = Object.values(CHARACTERS_DB).map(ch => {
+        const relicDef = RELICS_DB[(ch.relics || [])[0]];
+        const deckCounts = {};
+        for (const defId of ch.deck || []) deckCounts[defId] = (deckCounts[defId] || 0) + 1;
+        const deckList = Object.entries(deckCounts)
+          .map(([defId, n]) => `${n}x ${(CARDS_DB[defId] || {}).name || defId}`).join(', ');
+        const tip = [
+          `${ch.maxHp} max HP, ${ch.gold} starting gold.`,
+          relicDef ? `Relic: ${relicDef.name} — ${relicDef.description}` : '',
+          `Deck: ${deckList}`
+        ].filter(Boolean).join('\n');
+        return `
         <div class="menu-character">
           <div class="menu-character-name">${ch.name}</div>
           <div class="menu-blurb">${ch.blurb}</div>
+          <button type="button" class="menu-character-stats" ${inspectAttrs(ch.name, tip)}>
+            ${ch.maxHp} HP · ${ch.gold}${icon('gold')} · ${relicDef ? relicDef.name : 'no relic'}
+          </button>
           <div class="asc-row">
             ${shownAscensions.map(a => `<button class="inline-chip-button" data-action="startGame" data-characterid="${ch.id}" data-ascension="${a}" data-ititle="Ascension ${a}" data-ibody="${attrEscape(describeAscension(a))}">Start A${a}</button>`).join('')}
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
       const recent = (meta.runs || []).slice(0, 3).map(r => `<div class="stat-line"><span>${r.won ? 'Win' : 'Loss'} · ${r.character}</span><span>F${r.floor} · A${r.ascension || 0}</span></div>`).join('') || '<div class="stat-line"><span>No runs yet</span><span>—</span></div>';
       const hasHistory = (meta.runs || []).length > 0;
       return `
@@ -7193,18 +7265,31 @@
         ? ` type="button"${opts.disabled ? ' disabled' : ''}`
         : '';
       const desc = describeCard(cardOrDef, opts.previewUpgraded);
+      // The name normally reflects the card's ACTUAL state. previewName marks a
+      // face that is showing what an upgrade WOULD do, so the + appears on a
+      // card that is not upgraded yet.
+      const showPlus = isUpgraded || !!opts.previewName;
       // Hover-tooltip anchor, emitted directly rather than via inspectAttrs():
       // that helper bundles data-action="inspect", which would fight the card's
       // own selectCard hook. The face already shows this text, but at --card-min
       // (92px) it is cramped, and the tooltip is where the note/warning read
       // properly. No data-action here, so the click path is untouched.
+      // Rarity: a badge for uncommon/rare, and the word itself in the tooltip so
+      // the signal is never shape-and-colour only.
+      const rarityGlyphs = { UNCOMMON: '◆', RARE: '★' };
+      const rarityLabel = { COMMON: 'Common', UNCOMMON: 'Uncommon', RARE: 'Rare' }[def.rarity] || '';
+      const rarityHTML = rarityGlyphs[def.rarity]
+        ? `<div class="card-rarity ${def.rarity.toLowerCase()}">${rarityGlyphs[def.rarity]}</div>`
+        : '';
+
       const tip =
-        `data-ititle="${attrEscape(def.name + (isUpgraded ? '+' : ''))}" ` +
-        `data-ibody="${attrEscape([desc, opts.warning, opts.note, opts.titleSuffix].filter(Boolean).join('\n'))}"`;
+        `data-ititle="${attrEscape(def.name + (showPlus ? '+' : ''))}" ` +
+        `data-ibody="${attrEscape([desc, rarityLabel && `Rarity: ${rarityLabel}`, opts.warning, opts.note, opts.titleSuffix].filter(Boolean).join('\n'))}"`;
       return `
         <${tag} class="${classes.join(' ')}"${btnAttrs} ${hook} ${tip}>
           <div class="card-cost">${def.cost}</div>
-          <div class="card-name">${def.name}${isUpgraded ? '+' : ''}</div>
+          ${rarityHTML}
+          <div class="card-name">${def.name}${showPlus ? '+' : ''}</div>
           <div class="card-art">${cardArtIcon(defId, def.type)}</div>
           <div class="card-type">${typeIcon(def.type)} ${def.type}</div>
           <div class="card-desc">${annotateKeywords(desc)}</div>
@@ -8084,6 +8169,28 @@
       `;
     }
 
+    // The run's artifact, on the screen where the run ends. Neither ending
+    // screen carried the status bar, so the deck and the relic tray — the thing
+    // the whole run was spent building — became unreachable at exactly the
+    // moment you would want to look at them. The full status bar does not fit
+    // the ending layout and half of it (potions, floor) is meaningless once the
+    // run is over, so this is the part that still means something.
+    function runArtifactHTML() {
+      if (!STATE.run) return '';
+      const relics = (STATE.run.relics || []).map(id => {
+        const def = RELICS_DB[id];
+        if (!def) return '';
+        const abbr = def.short || id.substring(0, 2).toUpperCase();
+        return `<button type="button" class="relic-chip" aria-label="${attrEscape(def.name)}" ${inspectAttrs(def.name, def.description)}>${relicIcon(id, abbr)}</button>`;
+      }).join('');
+      return `
+        <div class="run-artifact">
+          <button class="inline-chip-button" data-action="viewPile" data-pile="deck">${icon('deck')} View final deck (${STATE.run.deck.length})</button>
+          ${relics ? `<div class="relic-tray">${relics}</div>` : ''}
+        </div>
+      `;
+    }
+
     function renderVictory() {
       return `
         <div class="screen victory-screen">
@@ -8093,11 +8200,13 @@
               <div class="panel-text">You have defeated ${STATE.run.bossName || 'the vault boss'} and escaped Act ${STATE.act || 1} of the Cinder Vault!</div>
               <div class="stats-box">
                 <div class="stat-line"><span>Act Cleared:</span><span>${STATE.act || 1}</span></div>
+                <div class="stat-line"><span>Ascension:</span><span>A${STATE.ascension || 0}</span></div>
                 <div class="stat-line"><span>Floors Cleared:</span><span>${STATE.run.floor}</span></div>
                 <div class="stat-line"><span>Gold Collected:</span><span>${STATE.run.gold}</span></div>
                 <div class="stat-line"><span>Deck Size:</span><span>${STATE.run.deck.length}</span></div>
                 <div class="stat-line"><span>Relics Collected:</span><span>${STATE.run.relics.length}</span></div>
               </div>
+              ${runArtifactHTML()}
             </div>
             <div class="run-seed-line">Seed <code>${STATE.seed}</code></div>
             ${(() => {
@@ -8128,15 +8237,18 @@
       return `
         <div class="screen victory-screen">
           <div class="gameover-panel">
-            <div class="gameover-title">${icon('t-defeat','icon-title')} DEFEAT ${icon('t-defeat','icon-title')}</div>
+            <h1 class="gameover-title">${icon('t-defeat','icon-title')} DEFEAT ${icon('t-defeat','icon-title')}</h1>
             <div class="panel-content">
               <div class="panel-text">Your journey has come to an end...</div>
               <div class="stats-box">
                 <div class="stat-line"><span>Reached Floor:</span><span>${STATE.run.floor}</span></div>
+                <div class="stat-line"><span>Act:</span><span>${STATE.act || 1}</span></div>
+                <div class="stat-line"><span>Ascension:</span><span>A${STATE.ascension || 0}</span></div>
                 <div class="stat-line"><span>Gold Collected:</span><span>${STATE.run.gold}</span></div>
                 <div class="stat-line"><span>Cards in Deck:</span><span>${STATE.run.deck.length}</span></div>
                 <div class="stat-line"><span>Relics Collected:</span><span>${STATE.run.relics.length}</span></div>
               </div>
+              ${runArtifactHTML()}
             </div>
             <div class="run-seed-line">Seed <code>${STATE.seed}</code></div>
             <button class="new-run-button" data-action="newRun">Try Again (same character)</button>
@@ -8168,11 +8280,15 @@
           action: 'pickCard',
           dataAttr: 'data-carduid',
           dataValue: card.uid,
-          // On the upgrade picker, show what you would GET (the name stays unsuffixed
-          // because the card is not upgraded yet).
+          // On the upgrade picker, show what you would GET — and say so. The
+          // face used to swap silently to upgraded values under an unsuffixed
+          // name, so "Deal 9 damage" gave no clue whether 9 was the before or
+          // the after. The + on the name marks it as a preview; the note
+          // carries the current text so the trade is legible.
           previewUpgraded: (!isRemove && !disabled) ? true : undefined,
-          disabled,
-          note
+          previewName: (!isRemove && !disabled) ? true : undefined,
+          note: note || ((!isRemove && !disabled) ? `now: ${describeCard(card, false)}` : ''),
+          disabled
         });
       }).join('')}</div>`;
 
@@ -8221,6 +8337,20 @@
         const labels = { drawPile: 'Draw Pile', discardPile: 'Discard Pile', exhaustPile: 'Exhaust Pile', activePowers: 'Active Powers', hand: 'Hand' };
         title = `${labels[pile] || pile} (${STATE.combat[pile].length})`;
         cards = STATE.combat[pile];
+        // The draw pile is shown SORTED, not in draw order. drawCards shifts off
+        // the front, so printing it verbatim was a perfect lookahead — "Draw 12"
+        // told you the next twelve cards in sequence and deck-tracking stopped
+        // being a skill. You still see exactly WHAT is in there, which is the
+        // question worth answering; you no longer see the order. Sorting a copy,
+        // and by cost then name so it is stable and consumes no RNG in render.
+        if (pile === 'drawPile') {
+          cards = cards.slice().sort((a, b) => {
+            const da = CARDS_DB[a.defId] || {}, db = CARDS_DB[b.defId] || {};
+            const ca = typeof da.cost === 'number' ? da.cost : 99;
+            const cb = typeof db.cost === 'number' ? db.cost : 99;
+            return ca - cb || String(da.name).localeCompare(String(db.name));
+          });
+        }
       }
       // Real card faces in a grid: a 30-card deck used to show about four rows.
       // These are readable but not clickable, hence staticFace rather than the
@@ -8228,7 +8358,7 @@
       const cardsHTML = cards.length
         ? `<div class="card-list">${cards.map(card => cardFaceHTML(card, { staticFace: true })).join('')}</div>`
         : '<div class="panel-text">No cards here.</div>';
-      const statsHTML = pile === 'deck' ? renderDeckStats(cards) : '';
+      const statsHTML = (pile === 'deck' || pile === 'drawPile') ? renderDeckStats(cards) : '';
       return `
         <div class="screen center-panel-screen">
           <div class="center-panel wide">
