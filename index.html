@@ -3536,7 +3536,11 @@
         onCardPlayed: (game) => {
           const s = relicScratch(game, 'pen-nib');
           s.count = (s.count || 0) + 1;
-          if (s.count % 3 === 0) game.combat._penNibPrimed = true;
+          // This hook fires AFTER a card resolves and the primed flag is
+          // consumed at the TOP of the next playCard — so priming on the 2nd,
+          // 5th, 8th play is what makes the 3rd, 6th, 9th card upgraded.
+          // Priming on % 3 === 0 upgraded the 4th, 7th, 10th.
+          if (s.count % 3 === 2) game.combat._penNibPrimed = true;
         }
       },
       'molten-heart': {
@@ -3805,8 +3809,11 @@
     const EVENTS_DB = [
       {
         id: 'merchant', title: 'Wandering Merchant', text: 'A cloaked figure offers a mysterious deal...',
+        // The relic is rolled once in applyEvent and parked in ui.eventRelicId;
+        // rolling inside canApply consumed RNG on every render of this screen.
+        needsRelicRoll: true,
         choices: [
-          { label: 'Trade 10 gold for a random relic', desc: 'Lose 10 gold. Gain a relic you do not already own.', canApply: (game) => game.run.gold >= 10 && !!getRandomRelic(game), apply: (game) => { const r = getRandomRelic(game); if (r) { game.run.gold -= 10; grantRelic(game, r); } } },
+          { label: 'Trade 10 gold for a random relic', desc: 'Lose 10 gold. Gain a relic you do not already own.', canApply: (game) => game.run.gold >= 10 && !!game.ui.eventRelicId, apply: (game) => { const r = game.ui.eventRelicId; if (r) { game.run.gold -= 10; grantRelic(game, r); } } },
           { label: 'Walk away', desc: 'Nothing happens.', apply: () => {} }
         ]
       },
@@ -3841,9 +3848,11 @@
       },
       {
         id: 'sealed-vault', title: 'Sealed Vault', text: 'A brass door asks for payment before it will open.',
+        // See merchant: one roll at pick time, both doors open onto the same relic.
+        needsRelicRoll: true,
         choices: [
-          { label: 'Pay 25 gold', desc: 'Lose 25 gold. Gain a random relic.', canApply: (game) => game.run.gold >= 25 && !!getRandomRelic(game), apply: (game) => { const r = getRandomRelic(game); if (r) { game.run.gold -= 25; grantRelic(game, r); } } },
-          { label: 'Force the lock', desc: 'Gain a random relic. Add Decay to your deck.', canApply: (game) => !!getRandomRelic(game), apply: (game) => { const r = getRandomRelic(game); if (r) grantRelic(game, r); game.run.deck.push({ uid: uid(), defId: 'curse-decay', upgraded: false }); } },
+          { label: 'Pay 25 gold', desc: 'Lose 25 gold. Gain a random relic.', canApply: (game) => game.run.gold >= 25 && !!game.ui.eventRelicId, apply: (game) => { const r = game.ui.eventRelicId; if (r) { game.run.gold -= 25; grantRelic(game, r); } } },
+          { label: 'Force the lock', desc: 'Gain a random relic. Add Decay to your deck.', canApply: (game) => !!game.ui.eventRelicId, apply: (game) => { const r = game.ui.eventRelicId; if (r) grantRelic(game, r); game.run.deck.push({ uid: uid(), defId: 'curse-decay', upgraded: false }); } },
           { label: 'Leave it sealed', desc: 'Nothing happens.', apply: () => {} }
         ]
       },
@@ -5216,8 +5225,12 @@
       // log panel has a state snapshot to summarise the turn with.
       combatLog(game, 'sys', 'turn', `Turn ${game.combat.turnNum}`, { snap: turnSnapshot(game) });
 
-      // Clear block at start of turn unless a relic preserves it.
-      if (!anyRelic(game, r => r.preservesBlock)) game.combat.player.block = 0;
+      // Clear block at start of turn unless a relic preserves it. Not on
+      // turn 1: the player initialises at 0 block, so the only thing this
+      // could clear there is what an onCombatStart relic just granted —
+      // Old Locket's 5 block died right here, unfelt, from the day it was
+      // written.
+      if (game.combat.turnNum > 1 && !anyRelic(game, r => r.preservesBlock)) game.combat.player.block = 0;
 
       // Per-turn relic hooks (reset flags, prime draws, etc.).
       game.combat._extraDraw = 0;
@@ -5348,7 +5361,12 @@
         game.combat._echoing = false;
       }
 
-      card.upgraded = originallyUpgraded;
+      // A Pen-Nib'd POWER keeps the upgrade: its whole effect lives in hooks
+      // that re-read card.upgraded from the stored instance every turn, so
+      // restoring the flag here silently downgraded it forever. Safe to keep —
+      // combat cards are clones ({...c}) of the deck entries, so the deck copy
+      // is untouched.
+      if (cardDef.type !== CARD_TYPES.POWER) card.upgraded = originallyUpgraded;
 
       // Relic hooks reacting to a card being played (War Drums, Pen Nib, ...).
       fireRelicHook(game, 'onCardPlayed', card, cardDef);
@@ -5468,8 +5486,14 @@
 
       if (allEnemiesDefeated(game)) { checkCombatEnd(game); return; }
 
-      for (const enemy of game.combat.enemies) {
+      // Living enemies only. Corpses re-rolling intents burned one seeded
+      // rand() per turn (Ash Hound), shifting every downstream roll, and let
+      // HP-threshold getIntents latch state post-mortem. And an enemy summoned
+      // THIS turn already chose its opener inside summonEnemy — re-choosing
+      // here advanced it past pattern[0] before the player ever saw it.
+      for (const enemy of game.combat.enemies.filter(e => e.alive)) {
         tickStatusesEndOfTurn(enemy);
+        if (enemy._summonedTurn === game.combat.turnNum) continue;
         chooseIntent(game, enemy);
       }
 
@@ -5748,6 +5772,10 @@
       hpScale += Math.max(0, (game.act || 1) - 1) * 0.20;
       const scaledMaxHp = Math.max(1, Math.round(template.maxHp * hpScale));
       const enemy = { uid: uid(), defId: enemyDefId, name: template.name, hp: scaledMaxHp, maxHp: scaledMaxHp, block: 0, statuses: {}, intent: null, alive: true, intentIndex: 0, template };
+      // Tag the birth turn so runEnemyTurn's end-of-turn loop does not choose
+      // a second intent on top of this one (it skipped pattern[0] otherwise).
+      // Falsy-default: summons in old saves simply re-choose, as they used to.
+      enemy._summonedTurn = game.combat.turnNum;
       chooseIntent(game, enemy);
       game.combat.enemies.push(enemy);
       return enemy;
@@ -5758,7 +5786,11 @@
       const isPlayerTarget = target === game.combat.player;
       const sourceIsPlayer = source === game.combat.player;
 
-      let amount = baseAmount + (source.statuses.might || 0);
+      // Might is a property of swung attacks. Reactive damage (Thornmail,
+      // Thorn Plate) already skips the attack relic modifiers below; it skips
+      // Might for the same reason — a Might-stacked Knight was dealing 15+
+      // through a "deal 3 back" relic.
+      let amount = baseAmount + (ctx.thorns ? 0 : (source.statuses.might || 0));
 
       // Player attack damage modifiers (Brass Knuckles, Cracked Whetstone, ...).
       // Thorns/reactive damage is not an "attack" and skips these.
@@ -6081,6 +6113,13 @@
       const event = unseen[Math.floor(rand() * unseen.length)];
       game.run.seenEventIds.push(event.id);
       game.ui.eventDef = event;
+      // Events that offer "a random relic" roll it ONCE, here, at pick time.
+      // Their canApply used to call getRandomRelic during render, which
+      // consumed seeded rand() on every redraw — pinning a tooltip on the
+      // event screen desynced the run's RNG — and the availability check and
+      // the payout were two unrelated draws. Stored by id (STATE.ui holds
+      // data, not live objects); apply() grants exactly what was rolled.
+      if (event.needsRelicRoll) game.ui.eventRelicId = getRandomRelic(game) || null;
     }
 
     // ============ 9. NAVIGATION ============
@@ -8209,9 +8248,11 @@
             if (checkRunDeath(STATE)) break;
             if (STATE.screen === SCREENS.COMBAT) {
               STATE.ui.eventDef = null;
+              STATE.ui.eventRelicId = null;
             } else {
               fireNonCombatRelicHook(STATE, 'onEventComplete', { event: activeEvent, choice: eventChoice });
               STATE.ui.eventDef = null;
+              STATE.ui.eventRelicId = null;
               goTo(SCREENS.MAP);
             }
           }
@@ -8223,6 +8264,7 @@
         // controls on screen were the same choices that had just failed.
         case 'leaveEvent':
           STATE.ui.eventDef = null;
+          STATE.ui.eventRelicId = null;
           goTo(SCREENS.MAP);
           break;
 
@@ -8932,6 +8974,7 @@
           const choice = event.choices.find(c => !c.canApply || c.canApply(STATE)) || event.choices[0];
           choice.apply(STATE);
           STATE.ui.eventDef = null;
+          STATE.ui.eventRelicId = null;
           if (checkRunDeath(STATE)) break;
           goTo(SCREENS.MAP);
         } else if (STATE.screen === SCREENS.TREASURE) {
