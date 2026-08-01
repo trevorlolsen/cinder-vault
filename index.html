@@ -2274,6 +2274,21 @@
     // never be dealt into a permanent deck. validateContent checks each exists.
     const CURSE_IDS = ['curse-doubt', 'curse-decay', 'curse-ballast', 'curse-tithe', 'curse-slag'];
 
+    // The lathe's ladder. BASIC sits below COMMON on purpose: a starting Slash
+    // and a Doubt curse are both BASIC, and both are things a player should be
+    // able to feed the wheel. RARE has nowhere to go and re-rolls at RARE,
+    // which is still a real outcome — a rare you cannot use for one you can.
+    // Picker purposes that UPGRADE a card rather than taking one out of the
+    // deck. 'refine' is the rest site's, 'shop-refine' the paid one.
+    const UPGRADE_PURPOSES = ['refine', 'shop-refine'];
+
+    const TRANSFORM_UP = {
+      [CARD_RARITIES.BASIC]: CARD_RARITIES.COMMON,
+      [CARD_RARITIES.COMMON]: CARD_RARITIES.UNCOMMON,
+      [CARD_RARITIES.UNCOMMON]: CARD_RARITIES.RARE,
+      [CARD_RARITIES.RARE]: CARD_RARITIES.RARE
+    };
+
     const RARITY_WEIGHTS = { COMMON: 0.6, UNCOMMON: 0.3, RARE: 0.1 };
     const ELITE_RARITY_WEIGHTS = { COMMON: 0.45, UNCOMMON: 0.35, RARE: 0.20 };
     const BOSS_RARITY_WEIGHTS = { COMMON: 0.35, UNCOMMON: 0.40, RARE: 0.25 };
@@ -2370,7 +2385,7 @@
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
-    // The 223-entry path-data map lives in assets/icons.js (generated, ~293KB).
+    // The 227-entry path-data map lives in assets/icons.js (generated, ~293KB).
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
@@ -2408,7 +2423,7 @@
     const CARD_TYPE_ICONS = { ATTACK: 'type-attack', SKILL: 'type-skill', POWER: 'type-power', CURSE: 'type-curse' };
     const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge', 'coin-purse': 'pot-coin-purse', 'whetting-oil': 'pot-whetting', 'marrow-tonic': 'pot-marrow', 'solvent': 'pot-solvent' };
     const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem', 'censer-drone': 'e-censer-drone', 'gilded-penitent': 'e-gilded-penitent', 'ash-seraph': 'e-ash-seraph', 'oathbound': 'e-oathbound', 'reliquary-ward': 'e-reliquary-ward', 'sealed-arbiter': 'e-sealed-arbiter', 'hallowed-effigy': 'e-hallowed-effigy', 'cinder-saint': 'e-cinder-saint', 'vault-heart': 'e-vault-heart', 'saint-ashvault': 'e-saint-ashvault', 'unsworn-flame': 'e-unsworn-flame', 'slag-monarch': 'e-slag-monarch' };
-    const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil' };
+    const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil', 'governor-spring': 'r-governor-spring', 'recoil-damper': 'r-recoil-damper', 'null-plate': 'r-null-plate', 'bellows-heart': 'r-bellows-heart' };
     const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike', 'curse-ballast': 'c-ballast', 'curse-tithe': 'c-tithe', 'curse-slag': 'c-slag', 'pyre-ledger': 'c-pyre-ledger', 'rot-cellar': 'c-rot-cellar', 'overseer-array': 'c-overseer-array' };
     // Ids (relics + potions) that have a curated colored pixel-art raster in assets/art/icons/.
     // Any id NOT listed here falls through to the monochrome game-icons.net SVG below.
@@ -4215,6 +4230,92 @@
         description: 'Gain 1 extra energy each turn. Draw 1 fewer card each turn.',
         energyBonus: 1,
         onTurnStart: (game) => { game.combat._extraDraw = (game.combat._extraDraw || 0) - 1; }
+      },
+
+      // ===== v8 Phase 13: the relics the Phase 8 sockets were cut for =====
+      // onTurnEnd, modifyIncomingDamage and modifyBlockGain were all added
+      // inert, and an unconsumed hook is indistinguishable from a broken one.
+      // These consume all three. None is a "start combat with a stat": that
+      // pattern already had six entries and needed no seventh.
+
+      // The Tinker's real tension is not "can I draw cards", it is "I drew nine
+      // and could afford four". Every other relic pays for what you PLAY; this
+      // is the only thing in the game that pays for what you could not. It is
+      // also the only relic that CAN exist, because onTurnEnd fires before the
+      // hand resolves — one line later the hand is in the discard pile and
+      // there is nothing left to count. Capped at three cards: a Tinker holding
+      // a dead six-card hand is having a bad turn, and this softens that rather
+      // than making hoarding a strategy.
+      'governor-spring': {
+        id: 'governor-spring', name: 'Governor Spring', short: 'GS',
+        characters: ['vault-tinker'],
+        description: 'At the end of your turn, gain 2 block for each card left in your hand (max 6).',
+        onTurnEnd: (game) => {
+          const held = game.combat.hand.length;
+          if (!held) return;
+          const block = Math.min(6, held * 2);
+          gainBlock(game.combat.player, block);
+          combatLog(game, 'you', 'relic', `Governor Spring converts ${held} held card${held === 1 ? '' : 's'} into ${block} block.`, { minor: true });
+        }
+      },
+
+      // Scrap Shot and Scrap Cannon already read the discard pile and both are
+      // attacks, so the Tinker's signature resource had exactly one thing it
+      // could buy. This is the defensive half.
+      //
+      // Once per turn, deliberately: modifyBlockGain fires per gainBlock CALL,
+      // and this class plays three or four small block cards a turn, so an
+      // uncapped modifier would multiply by cards played rather than by the
+      // pile — a much larger relic than the one on the tin.
+      'recoil-damper': {
+        id: 'recoil-damper', name: 'Recoil Damper', short: 'RD',
+        characters: ['vault-tinker'],
+        description: 'The first block you gain each turn is increased by 1 for every 4 cards in your discard pile (max +6).',
+        onTurnStart: (game) => { relicScratch(game, 'recoil-damper').used = false; },
+        modifyBlockGain: (game, amount) => {
+          const s = relicScratch(game, 'recoil-damper');
+          if (s.used) return amount;
+          s.used = true;
+          return amount + Math.min(6, Math.floor(game.combat.discardPile.length / 4));
+        }
+      },
+
+      // Aegis is the Tinker's own status and it is DEAD against half the
+      // bestiary: it negates the next debuff, so against anything that only
+      // attacks, every stack sits on the bar doing nothing — and Failsafe
+      // Array's entire per-turn payload is one of those stacks. This gives the
+      // status a floor. Sits on modifyIncomingDamage, which lands BEFORE block,
+      // so 3 is deliberately small: it is 3 real HP off every hit, not 3 block
+      // the next hit eats. Stateless, so ctx.preview needs no handling — the
+      // intent preview and the real swing read the same condition and agree.
+      'null-plate': {
+        id: 'null-plate', name: 'Null Plate', short: 'NP',
+        characters: ['vault-tinker'],
+        description: 'While you have Aegis, damage you take is reduced by 3.',
+        modifyIncomingDamage: (game, amount) => (game.combat.player.statuses.aegis ? Math.max(0, amount - 3) : amount)
+      },
+
+      // The Cinder Knight had ZERO class-scoped relics — the Seer had two and
+      // the Tinker now has three, so the class whose blurb reads "blood paid
+      // for power" was the one the relic pool never wrote for, and The Fitting
+      // Room's class roll had nothing to hand it.
+      //
+      // +1 energy is the biggest single power swing in the game, so both
+      // existing energy relics carry a permanent downside: Cracked Core locks
+      // out resting, Sunless Coil costs a card. This is the third shape — use
+      // it or bleed for it — and the only one that punishes the TURN rather
+      // than the run. loseHp, not dealDamage: a self-inflicted cost like Blood
+      // Pact, ignoring block on purpose, and it can kill you. endPlayerTurn
+      // checks HP a few lines below this hook and routes to checkCombatEnd.
+      'bellows-heart': {
+        id: 'bellows-heart', name: 'Bellows Heart', short: 'BH',
+        characters: ['cinder-knight'],
+        description: 'Gain 1 extra energy each turn. At the end of your turn, lose 2 HP for each unspent energy.',
+        energyBonus: 1,
+        onTurnEnd: (game) => {
+          const wasted = Math.max(0, game.combat.energy);
+          if (wasted > 0) loseHp(game, wasted * 2, 'Bellows Heart');
+        }
       }
     };
 
@@ -4357,27 +4458,114 @@
 
     const EVENTS_DB = [
       {
-        id: 'merchant', title: 'Wandering Merchant', text: 'A cloaked figure offers a mysterious deal...',
+        id: 'merchant', title: 'Wandering Merchant',
+        text: 'A cloaked figure spreads a cloth on the stone and sets one thing on it. He does not haggle and he does not explain.',
         // The relic is rolled once in applyEvent and parked in ui.eventRelicId;
         // rolling inside canApply consumed RNG on every render of this screen.
         needsRelicRoll: true,
         choices: [
-          { label: 'Trade 10 gold for a random relic', desc: 'Lose 10 gold. Gain a relic you do not already own.', canApply: (game) => game.run.gold >= 10 && !!game.ui.eventRelicId, apply: (game) => { const r = game.ui.eventRelicId; if (r) { game.run.gold -= 10; grantRelic(game, r); } } },
-          { label: 'Walk away', desc: 'Nothing happens.', apply: () => {} }
+          {
+            // NAMING what is on the cloth is the whole fix. "10 gold for a
+            // random relic" was never once declined, and not because 10 gold is
+            // cheap: an unknown has no price a player can refuse. The roll is
+            // already sitting in ui.eventRelicId when this screen draws.
+            // Showing it turns a formality into a question about THIS relic,
+            // which a Knight looking at Plague Sigil answers differently from a
+            // Seer. 90 sits below the shop's 150-200 and above one combat's
+            // gold, so it is a real cost either way.
+            label: 'Buy it — 90 gold',
+            desc: (game) => {
+              const r = RELICS_DB[game.ui.eventRelicId];
+              return r ? `${r.name} — ${r.description}` : 'His cloth is empty tonight.';
+            },
+            canApply: (game) => game.run.gold >= 90 && !!game.ui.eventRelicId,
+            apply: (game) => { const r = game.ui.eventRelicId; if (r) { game.run.gold -= 90; grantRelic(game, r); } }
+          },
+          {
+            // A second currency, so a broke run is not simply locked out of the
+            // only relic it will be offered BY NAME all game, and a rich one
+            // still has something to weigh. Max HP is the one thing no shop
+            // sells back.
+            label: 'Pay in years — 12 max HP',
+            desc: (game) => {
+              const r = RELICS_DB[game.ui.eventRelicId];
+              return r ? `Lose 12 max HP. Gain ${r.name}.` : 'His cloth is empty tonight.';
+            },
+            canApply: (game) => game.run.maxHp > 42 && !!game.ui.eventRelicId,
+            apply: (game) => {
+              const r = game.ui.eventRelicId;
+              if (!r) return;
+              game.run.maxHp = Math.max(30, game.run.maxHp - 12);
+              game.run.hp = Math.min(game.run.hp, game.run.maxHp);
+              grantRelic(game, r);
+            }
+          },
+          { label: 'Walk away', desc: 'Keep your coin and your years.', apply: () => {} }
         ]
       },
       {
-        id: 'fountain', title: 'Ancient Fountain', text: 'A glowing pool of water beckons...',
+        id: 'fountain', title: 'Ancient Fountain',
+        text: 'The water has been running since before the vault was sealed, and it is still warm.',
         choices: [
-          { label: 'Drink from the fountain (+15 HP)', desc: 'Heal 15 HP, up to your maximum.', apply: (game) => { healRun(game, 15, 'Ancient Fountain'); } },
-          { label: 'Pass by', desc: 'Keep moving.', apply: () => {} }
+          {
+            // Percent, not a flat 15. The old flat heal was worth zero at full
+            // HP, which is precisely WHY this event needed a "pass by" leg —
+            // the choice was "take a free thing, or don't". A proportional heal
+            // scales with the run and never becomes the obvious answer.
+            label: 'Wash your wounds',
+            desc: (game) => `Heal 30% of your max HP (${Math.floor(game.run.maxHp * 0.30)}).`,
+            apply: (game) => { healRun(game, Math.floor(game.run.maxHp * 0.30), 'Ancient Fountain'); }
+          },
+          {
+            // Costs a potion slot, which is the point: a full belt cannot take
+            // this, so a player who just claimed a combat drop has to decide
+            // which of the two mattered more.
+            label: 'Fill a flask',
+            desc: 'Gain a Second Breath Elixir. Requires an empty potion slot.',
+            canApply: (game) => game.run.potions.some(p => p === null),
+            apply: (game) => { const i = game.run.potions.findIndex(p => p === null); if (i !== -1) game.run.potions[i] = 'second-breath'; }
+          },
+          {
+            // Gold in, permanence out — the only permanent thing on this screen
+            // and the only one a shop cannot sell you.
+            label: 'Cast a coin in — 60 gold',
+            desc: 'Lose 60 gold. Gain 8 max HP and heal the same.',
+            canApply: (game) => game.run.gold >= 60,
+            apply: (game) => { game.run.gold -= 60; gainMaxHp(game, 8, true); }
+          }
         ]
       },
       {
-        id: 'campfire', title: 'Abandoned Campfire', text: 'The embers still glow... perhaps food remains?',
+        id: 'campfire', title: 'Abandoned Campfire',
+        text: 'The embers are still hot and the pack beside them is still packed. Whatever drove its owner off did not go far.',
+        // The fountain owns healing now, so this owns something else: it is the
+        // table's SECOND fight. One combat event in twelve is not a pattern a
+        // player can learn, and the one that existed staged an ELITE, which is
+        // a decision only an already-winning deck gets to make. Two 34 HP
+        // bodies is the version a losing deck can also answer.
         choices: [
-          { label: 'Rest and eat (+10 HP)', desc: 'Heal 10 HP.', apply: (game) => { healRun(game, 10, 'Abandoned Campfire'); } },
-          { label: 'Continue onward', desc: 'Leave the food untouched.', apply: () => {} }
+          {
+            // potionId names a REAL potion: checkCombatEnd passes it straight
+            // into ui.combatReward and renderCardReward indexes POTIONS_DB with
+            // it. Only `relicId` understands 'random'.
+            label: 'Wait for whatever comes back',
+            desc: 'Fight two Ash Hounds. Win 40 extra gold and a Vigor Tonic.',
+            apply: (game) => { startEventCombat(game, ['ashhound', 'ashhound'], { gold: 40, potionId: 'vigor', text: 'The camp, the pack and the fire are yours.' }); }
+          },
+          {
+            // Take the loot and skip the fight — strictly less, guaranteed. The
+            // curse is what stops it being the safe answer forever.
+            label: 'Take the pack and run',
+            desc: 'Gain 30 gold. Add a curse to your deck.',
+            apply: (game) => { game.run.gold += 30; game.run.deck.push({ uid: uid(), defId: pickOne(CURSE_IDS), upgraded: false }); }
+          },
+          {
+            // The quiet leg, and the only one with no cost. Small on purpose:
+            // it must be a real answer at 20 HP and a bad one at 60.
+            label: 'Bank the fire and move on',
+            desc: 'Heal 12 HP.',
+            apply: (game) => { healRun(game, 12, 'Abandoned Campfire'); }
+          }
         ]
       },
       {
@@ -4406,27 +4594,120 @@
         ]
       },
       {
-        id: 'blood-altar', title: 'Blood Altar', text: 'A red altar promises strength in exchange for something permanent.',
+        id: 'blood-altar', title: 'Blood Altar',
+        text: 'A red altar promises strength in exchange for something permanent. It is not interested in your gold, but it will take it.',
         choices: [
-          { label: 'Offer vitality', desc: 'Lose 6 max HP. Gain a random rare card.', apply: (game) => { game.run.maxHp = Math.max(30, game.run.maxHp - 6); game.run.hp = Math.min(game.run.hp, game.run.maxHp); grantRandomCard(game, CARD_RARITIES.RARE); } },
-          { label: 'Offer coin', desc: 'Lose 30 gold. Gain a random uncommon card.', canApply: (game) => game.run.gold >= 30, apply: (game) => { game.run.gold -= 30; grantRandomCard(game, CARD_RARITIES.UNCOMMON); } },
-          { label: 'Refuse', desc: 'Keep your blood and coin.', apply: () => {} }
+          {
+            // includeShared: false. Without it this promised a rare "of your
+            // class" and could hand out a SHARED neutral instead — the exact
+            // bug the `technique` boon's opts were added to fix once Phase 10
+            // gave SHARED three rares of its own. Two callers making the same
+            // promise have to make the same call; one of them was not.
+            label: 'Offer vitality',
+            desc: 'Lose 8 max HP. Gain a random rare card of your class.',
+            canApply: (game) => game.run.maxHp > 38,
+            apply: (game) => {
+              game.run.maxHp = Math.max(30, game.run.maxHp - 8);
+              game.run.hp = Math.min(game.run.hp, game.run.maxHp);
+              grantRandomCard(game, CARD_RARITIES.RARE, { includeShared: false });
+            }
+          },
+          {
+            label: 'Offer coin',
+            desc: 'Lose 60 gold. Gain a random uncommon card of your class.',
+            canApply: (game) => game.run.gold >= 60,
+            apply: (game) => { game.run.gold -= 60; grantRandomCard(game, CARD_RARITIES.UNCOMMON, { includeShared: false }); }
+          },
+          {
+            // 6 max HP for a rare was a formality, not a price, and the refusal
+            // leg was dead because of it. At 8 and 60 the refusal is live for a
+            // deck that does not want a fifteenth card.
+            label: 'Refuse', desc: 'A thinner deck is also a kind of strength.', apply: () => {}
+          }
         ]
       },
       {
-        id: 'cartographer', title: 'Lost Cartographer', text: 'A trembling mapmaker offers to mark safer paths ahead.',
+        id: 'cartographer', title: 'The Cartographer',
+        text: 'He got further than most and further than he should have. His charts are finished. He is not.',
+        // The label promised "safer paths ahead" and the effect was heal 8 for
+        // 15 gold. There is no pathing system to bolt on and there should not
+        // be one, so the flavour moves to meet the mechanic instead: charts are
+        // worth MONEY, which is a thing charts are actually worth.
         choices: [
-          { label: 'Buy the map', desc: 'Lose 15 gold. Heal 8 HP.', canApply: (game) => game.run.gold >= 15, apply: (game) => { game.run.gold -= 15; healRun(game, 8, 'Cartographer'); } },
-          { label: 'Rob the cartographer', desc: 'Gain 20 gold. Add Doubt to your deck.', apply: (game) => { game.run.gold += 20; game.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false }); } },
-          { label: 'Wish them luck', desc: 'Nothing happens.', apply: () => {} }
+          { label: 'Take his rations', desc: 'Heal 16 HP.', apply: (game) => { healRun(game, 16, 'The Cartographer'); } },
+          { label: 'Take his charts', desc: 'Gain 55 gold. They are worth more above ground than below it.', apply: (game) => { game.run.gold += 55; } },
+          {
+            // The only leg with a price, and so the only one worth thinking
+            // about: both goods AND something permanent. Whether a curse is
+            // worth 55 gold and 16 HP is a question about deck size and whether
+            // you have found removal yet — a different answer on floor 4 and 14.
+            label: 'Take everything and leave him',
+            desc: 'Heal 16 HP and gain 55 gold. Add a curse to your deck.',
+            apply: (game) => {
+              healRun(game, 16, 'The Cartographer');
+              game.run.gold += 55;
+              game.run.deck.push({ uid: uid(), defId: pickOne(CURSE_IDS), upgraded: false });
+            }
+          }
         ]
       },
       {
-        id: 'vital-spring', title: 'Vital Spring', text: 'Warm water pulses like a heartbeat beneath the stone.',
+        id: 'vital-spring', title: 'Vital Spring',
+        text: 'Warm water pulses like a heartbeat beneath the stone. Something down there is doing the pumping.',
+        // "+5 max HP and heal 5" versus "a Vigor Tonic" was not a choice — the
+        // first was the second, permanent and free. The fix is not to retune it
+        // but to move the event off the healing axis entirely; the fountain and
+        // the cartographer already own that, and three healing events in a
+        // twelve-event table is why two of them were the same event. This is
+        // the potion-belt event now, and its two legs run in opposite
+        // directions so neither can dominate the other.
         choices: [
-          { label: 'Bathe in the spring', desc: 'Gain 5 max HP and heal 5 HP.', apply: (game) => { gainMaxHp(game, 5, true); } },
-          { label: 'Bottle the warmth', desc: 'Gain a healing potion if you have room.', canApply: (game) => game.run.potions.some(p => p === null), apply: (game) => { const i = game.run.potions.findIndex(p => p === null); if (i !== -1) game.run.potions[i] = 'vigor'; } },
-          { label: 'Move on', desc: 'Nothing happens.', apply: () => {} }
+          {
+            // Scales with empty slots: enormous on an empty belt, unavailable
+            // on a full one, and the HP price scales with it.
+            label: 'Fill every flask',
+            desc: (game) => {
+              const n = game.run.potions.filter(p => p === null).length;
+              return `Lose ${n * 6} HP. Fill all ${n} empty potion slot${n === 1 ? '' : 's'}.`;
+            },
+            canApply: (game) => game.run.potions.some(p => p === null)
+              && game.run.hp > game.run.potions.filter(p => p === null).length * 6,
+            apply: (game) => {
+              // rollPotion consumes rand(), which is why it lives here and not
+              // one line up: canApply runs on every render of this screen.
+              const taken = new Set(game.run.potions.filter(Boolean));
+              let filled = 0;
+              for (let i = 0; i < game.run.potions.length; i++) {
+                if (game.run.potions[i] !== null) continue;
+                const id = rollPotion(taken);
+                if (!id) break;
+                taken.add(id);
+                game.run.potions[i] = id;
+                filled++;
+              }
+              loseHp(game, filled * 6, 'Vital Spring');
+            }
+          },
+          {
+            // The exact inverse, so the two legs can never both be right: one
+            // converts HP into potions, the other potions into gold. Which one
+            // a run wants is a question about the belt, not the deck.
+            label: 'Boil your flasks down',
+            desc: (game) => `Lose every potion you carry (${game.run.potions.filter(Boolean).length}). Gain 45 gold each.`,
+            canApply: (game) => game.run.potions.some(p => p !== null),
+            apply: (game) => {
+              const held = game.run.potions.filter(Boolean).length;
+              game.run.gold += held * 45;
+              game.run.potions = game.run.potions.map(() => null);
+            }
+          },
+          {
+            // The floor under an event whose other two legs are conditional.
+            // Deliberately not worth enough to be the default.
+            label: 'Drink and walk on',
+            desc: 'Gain 4 max HP and heal the same.',
+            apply: (game) => { gainMaxHp(game, 4, true); }
+          }
         ]
       },
       {
@@ -4455,6 +4736,141 @@
           { label: 'Sing along', desc: 'Gain 10 max HP and heal the same. Add Doubt to your deck.', apply: (game) => { gainMaxHp(game, 10, true); game.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false }); } },
           { label: 'Cover your ears', desc: 'Heal 12 HP.', apply: (game) => { healRun(game, 12, 'Echo of the Choir'); } },
           { label: 'Walk until it stops', desc: 'Nothing happens.', apply: () => {} }
+        ]
+      },
+
+      // ===== v8 Phase 13: the three shapes the table did not have =====
+      {
+        id: 'mnemonic-lathe', title: 'The Lathe',
+        text: 'A wheel of black glass, still turning after all this time. Press a technique against it and it will take something off — or put something else on.',
+        choices: [
+          {
+            // The table's first REMOVAL. Rest sites purge and the shop sells it
+            // at 75 climbing by 25, and that was the entire supply: a deck that
+            // cannot get smaller cannot get better after floor 8, and the event
+            // table — the one system whose whole job is run-shaping choices —
+            // had no way to shrink one.
+            //
+            // The HP price is charged on COMMIT, inside the picker branch, not
+            // here. The picker is cancellable, and an event that bills you for
+            // a screen you then back out of is a bug with no visible cause.
+            label: 'Grind one down',
+            desc: 'Lose 10 HP. Remove a card from your deck.',
+            canApply: (game) => game.run.deck.length > 1 && game.run.hp > 10,
+            apply: (game) => { game.ui.picker = { purpose: 'event-purge', costHp: 10 }; }
+          },
+          {
+            // Transformation is removal's opposite number, not its bigger
+            // brother: same deck size, unknown replacement, one rarity up. A
+            // deck of eleven good cards wants the first leg; a deck of sixteen
+            // Slashes wants this one. No deck wants both.
+            label: 'Recut one',
+            desc: 'Destroy a card. Gain a random card of your class, one rarity higher.',
+            canApply: (game) => game.run.deck.length > 1,
+            apply: (game) => { game.ui.picker = { purpose: 'transform' }; }
+          },
+          { label: 'Take the offcuts', desc: 'Gain 40 gold.', apply: (game) => { game.run.gold += 40; } }
+        ]
+      },
+      {
+        id: 'salvagers-alcove', title: 'The Fitting Room',
+        // Class-aware body text. The alcove is the same alcove; what is racked
+        // in it is not, and saying so is what makes the relic leg below read as
+        // a promise rather than a coincidence.
+        text: (game) => `Racks of gear, sized and shaped for one kind of work. Most of it is for hands that are not yours. One shelf is not: someone here was outfitting a ${game.run.characterName}.`,
+        // 'class', not true: this rolls from relics whose `characters` array
+        // names the run's class. getRandomRelic would merely PREFER them at
+        // a quarter weight, which is a weighting, not a promise.
+        needsRelicRoll: 'class',
+        choices: [
+          {
+            // The only place in the game a class relic can be sought rather
+            // than hoped for, which is what the permanent price buys.
+            label: 'Take the gear',
+            desc: (game) => {
+              const r = RELICS_DB[game.ui.eventRelicId];
+              return r ? `Lose 10 max HP. Gain ${r.name} — ${r.description}` : 'The shelf is bare.';
+            },
+            canApply: (game) => !!game.ui.eventRelicId && game.run.maxHp > 40,
+            apply: (game) => {
+              const r = game.ui.eventRelicId;
+              if (!r) return;
+              game.run.maxHp = Math.max(30, game.run.maxHp - 10);
+              game.run.hp = Math.min(game.run.hp, game.run.maxHp);
+              grantRelic(game, r);
+            }
+          },
+          {
+            // The other class-aware payout, on the other axis: relics change
+            // how a deck plays, cards change what it holds.
+            label: 'Take the notes',
+            desc: 'Gain a random rare card of your class. Add a curse to your deck.',
+            apply: (game) => {
+              grantRandomCard(game, CARD_RARITIES.RARE, { includeShared: false });
+              game.run.deck.push({ uid: uid(), defId: pickOne(CURSE_IDS), upgraded: false });
+            }
+          },
+          { label: 'Strip the shelves for scrap', desc: 'Gain 65 gold.', apply: (game) => { game.run.gold += 65; } }
+        ]
+      },
+      {
+        id: 'the-collector', title: 'The Collector',
+        text: 'He has no interest in your gold, your blood or your techniques. He wants the thing you walked in with.',
+        // Rolled once at pick time so the swap can NAME both sides. A blind
+        // trade is a coin flip; a named one is a comparison.
+        needsRelicRoll: true,
+        choices: [
+          {
+            // The relic TRADE the table never had. It can only ask for the
+            // STARTING relic — there is no relic picker and there must not be
+            // one, because ui state is data and a picker holding a live
+            // RELICS_DB entry is the eventDef bug wearing a different hat.
+            //
+            // That constraint produced the better event. The starting relic is
+            // the one piece of a run the player did not choose, and each class
+            // values surrendering it differently: Old Locket is 5 block, Plague
+            // Sigil is a third of the Seer's damage, and Runic Hourglass is the
+            // engine the Tinker's whole deck is built on. The same offer is a
+            // bargain, a gamble and an insult depending on who reads it.
+            label: (game) => {
+              const mine = RELICS_DB[startingRelicOf(game)];
+              const his = RELICS_DB[game.ui.eventRelicId];
+              return his && mine ? `Trade ${mine.name} for ${his.name}` : 'He has nothing to offer';
+            },
+            desc: (game) => {
+              const his = RELICS_DB[game.ui.eventRelicId];
+              return his ? `${his.description} You also receive 60 gold for the trouble.` : '';
+            },
+            canApply: (game) => !!game.ui.eventRelicId && hasRelic(game, startingRelicOf(game)),
+            apply: (game) => {
+              const mine = startingRelicOf(game);
+              const his = game.ui.eventRelicId;
+              if (!mine || !his) return;
+              // Relics are a flat id array and every consumer re-reads it —
+              // energyMaxFor recomputes at combat start, the hook dispatchers
+              // iterate live. Shrinking it mid-run needs no other bookkeeping.
+              game.run.relics = game.run.relics.filter(r => r !== mine);
+              grantRelic(game, his);
+              game.run.gold += 60;
+            }
+          },
+          {
+            // The cash-out: 150 is one shop relic, so this is "I would rather
+            // choose my next relic than be handed one", priced honestly.
+            label: (game) => {
+              const mine = RELICS_DB[startingRelicOf(game)];
+              return mine ? `Sell him ${mine.name}` : 'Sell him nothing';
+            },
+            desc: 'Lose your starting relic. Gain 150 gold.',
+            canApply: (game) => hasRelic(game, startingRelicOf(game)),
+            apply: (game) => {
+              const mine = startingRelicOf(game);
+              if (!mine) return;
+              game.run.relics = game.run.relics.filter(r => r !== mine);
+              game.run.gold += 150;
+            }
+          },
+          { label: 'Refuse', desc: 'Some things came in with you for a reason.', apply: () => {} }
         ]
       }
     ];
@@ -4607,7 +5023,8 @@
         map: null,
         currentNodeId: null,
         seenEventIds: [],
-        removalsThisRun: 0
+        removalsThisRun: 0,
+        upgradesThisRun: 0
       };
     }
 
@@ -4928,6 +5345,10 @@
         run.characterId = match ? match.id : 'cinder-knight';
       }
       if (run.removalsThisRun == null) run.removalsThisRun = 0;
+      // Backfilled rather than version-bumped, exactly like removalsThisRun
+      // above: an older save simply starts its upgrade ladder at the bottom,
+      // which is the correct reading of "has bought none yet".
+      if (run.upgradesThisRun == null) run.upgradesThisRun = 0;
       if (!run.seenEventIds) run.seenEventIds = [];
       if (game.act == null) game.act = 1;
       // Treasure nodes used to record only a boolean. Give already-looted ones a
@@ -5851,6 +6272,33 @@
       const weights = {};
       for (const rid of pool) weights[rid] = relicWeightFor(game, rid);
       return weightedPick(weights);
+    }
+
+    // Relics written FOR a class, not merely preferred by one. getRandomRelic
+    // weights off-class picks down to OFF_CLASS_RELIC_WEIGHT, which is right
+    // for an elite drop and wrong for an event whose whole premise is "this was
+    // left here for someone like you" — a weighting is not a promise.
+    //
+    // Falls back to the general roll when a class's own relics are all owned:
+    // an empty offer renders as a permanently greyed choice, which looks
+    // exactly like one you cannot afford and is worse than a generic relic.
+    function getRandomClassRelic(game) {
+      const owned = game.run.relics || [];
+      const pool = Object.keys(RELICS_DB).filter(rid => {
+        const def = RELICS_DB[rid];
+        return !owned.includes(rid) && def.characters && def.characters.includes(game.run.characterId);
+      });
+      return pool.length ? pickOne(pool) : getRandomRelic(game);
+    }
+
+    // The one relic a run did not choose. There is no relic picker and there
+    // must not be one — ui state is data, and a picker holding a live RELICS_DB
+    // entry is the eventDef bug wearing a different hat — but the STARTING
+    // relic is addressable from data alone, and it is the more interesting
+    // thing to trade anyway.
+    function startingRelicOf(game) {
+      const ch = CHARACTERS_DB[game.run.characterId];
+      return (ch && ch.relics && ch.relics[0]) || null;
     }
 
     // Per-turn energy for this run: the base plus every owned relic's energyBonus.
@@ -6895,6 +7343,16 @@
       return 75 + 25 * game.run.removalsThisRun;
     }
 
+    // The shop sold cards, relics, potions and removal, and had no way to make
+    // a card you already own better — so gold's only answer to "my deck is the
+    // right size but too weak" was to buy another card and make it bigger.
+    // Cheaper than removal at the first purchase and climbing faster, because
+    // an upgrade is a smaller edit than a cut and the ladder is what stops a
+    // gold-rich run buying its whole deck twice.
+    function upgradePrice(game) {
+      return 60 + 30 * game.run.upgradesThisRun;
+    }
+
     // The three shop purchases were near-identical blocks: find the item, check
     // gold, check one extra precondition, deduct, grant, mark sold. Only the
     // find/precondition/grant triple actually differed between them.
@@ -7027,7 +7485,14 @@
       // event screen desynced the run's RNG — and the availability check and
       // the payout were two unrelated draws. Stored by id (STATE.ui holds
       // data, not live objects); apply() grants exactly what was rolled.
-      if (event.needsRelicRoll) game.ui.eventRelicId = getRandomRelic(game) || null;
+      // `needsRelicRoll: 'class'` narrows the roll to relics WRITTEN for the
+      // run's character — see getRandomClassRelic for why a weighting will not
+      // do when the event's whole premise is that this gear was made for you.
+      if (event.needsRelicRoll) {
+        game.ui.eventRelicId = (event.needsRelicRoll === 'class'
+          ? getRandomClassRelic(game)
+          : getRandomRelic(game)) || null;
+      }
     }
 
     // ============ 9. NAVIGATION ============
@@ -8516,6 +8981,13 @@
 
       const removalCost = removalPrice(STATE);
       const canRemove = gold >= removalCost && STATE.run.deck.length > 1;
+      const upgradeCost = upgradePrice(STATE);
+      // Two separate conditions so the label can say WHICH one failed: an
+      // all-upgraded deck reads differently from an empty purse, and a button
+      // that is dim for an unstated reason is the thing `disabled` plus a
+      // stale description produces.
+      const canUpgradeAny = STATE.run.deck.some(c => !c.upgraded && !isCurseCardInstance(c));
+      const canUpgrade = gold >= upgradeCost && canUpgradeAny;
 
       return `
         <div class="screen center-panel-screen">
@@ -8536,6 +9008,12 @@
                 <div class="card-list">${potionsHTML}</div>
               </section>
               <div class="shop-removal">
+                <button type="button" class="choice-button" data-action="buyUpgrade"${canUpgrade ? '' : ' disabled'}>
+                  <span class="choice-label">Upgrade a Card</span>
+                  <span class="choice-desc">${canUpgradeAny
+                    ? `Permanently upgrade a card in your deck. Cost: ${icon('gold')} ${upgradeCost}`
+                    : 'Every card in your deck is already upgraded.'}</span>
+                </button>
                 <button type="button" class="choice-button removal-button" data-action="removeCard"${canRemove ? '' : ' disabled'}>
                   <span class="choice-label">Remove a Card</span>
                   <span class="choice-desc">Remove a card from your deck. Cost: ${icon('gold')} ${removalCost}</span>
@@ -8552,12 +9030,24 @@
       const event = STATE.ui.eventDef;
       if (!event) return renderMap();
 
+      // Labels, descs and body text may be functions of the run. This is what
+      // lets an event NAME the relic it rolled — the roll is already sitting in
+      // ui.eventRelicId when this screen draws, and "10 gold for an unknown
+      // relic" was never declined because an unknown has no price you can
+      // refuse. Same shape CARDS_DB already uses for `desc`.
+      //
+      // These run on EVERY render, so they obey the same purity rule canApply
+      // does: read state, never consume rand(). validateContent enforces it.
+      const evalText = (v) => (typeof v === 'function' ? v(STATE) : v);
+
       const choicesHTML = event.choices.map((choice, idx) => {
         const canApply = !choice.canApply || choice.canApply(STATE);
+        const label = evalText(choice.label);
+        const desc = evalText(choice.desc);
         return `
           <button type="button" class="choice-button ${canApply ? '' : 'disabled-choice'}" data-action="chooseEvent" data-choiceidx="${idx}"${canApply ? '' : ' disabled'}>
-            <span class="choice-label">${choice.label}</span>
-            ${choice.desc ? `<span class="choice-desc">${choice.desc}${canApply ? '' : ' (Unavailable)'}</span>` : ''}
+            <span class="choice-label">${label}</span>
+            ${desc ? `<span class="choice-desc">${desc}${canApply ? '' : ' (Unavailable)'}</span>` : ''}
           </button>
         `;
       }).join('');
@@ -8567,7 +9057,7 @@
           <div class="center-panel">
             <h2 class="panel-title">${icon('t-event','icon-title')} ${event.title} ${icon('t-event','icon-title')}</h2>
             <div class="panel-content">
-              <div class="panel-text">${event.text}</div>
+              <div class="panel-text">${evalText(event.text)}</div>
               ${choicesHTML}
               ${STATE.ui.error ? `
               <button class="choice-button" data-action="leaveEvent">
@@ -8813,11 +9303,21 @@
       const picker = STATE.ui.picker;
       // 'remove' (paid, shop), 'purge' (free, rest site) and 'boon' (free, run
       // start) all take a card out of the deck; 'refine' upgrades one.
-      const isRemove = picker.purpose === 'remove' || picker.purpose === 'purge' || picker.purpose === 'boon';
-      const title = isRemove
-        ? `${icon('t-remove','icon-title')} Remove a Card ${icon('t-remove','icon-title')}`
-        : `${icon('t-upgrade','icon-title')} Upgrade a Card ${icon('t-upgrade','icon-title')}`;
-      const desc = isRemove ? 'Choose a card to permanently remove from your deck:' : 'Choose a card to permanently upgrade:';
+      // UPGRADE_PURPOSES is the whitelist; everything else takes a card out of
+      // the deck. Named rather than inlined because the two are not
+      // interchangeable — a purpose landing in the wrong branch either offers
+      // to upgrade a card it then deletes, or dims every already-upgraded card
+      // on a screen that is trying to remove one.
+      const isRemove = !UPGRADE_PURPOSES.includes(picker.purpose);
+      const isTransform = picker.purpose === 'transform';
+      const title = isTransform
+        ? `${icon('t-remove','icon-title')} Recut a Card ${icon('t-remove','icon-title')}`
+        : isRemove
+          ? `${icon('t-remove','icon-title')} Remove a Card ${icon('t-remove','icon-title')}`
+          : `${icon('t-upgrade','icon-title')} Upgrade a Card ${icon('t-upgrade','icon-title')}`;
+      const desc = isTransform
+        ? 'Choose a card to feed to the lathe. It is destroyed, and you gain a random card of your class one rarity higher.'
+        : isRemove ? 'Choose a card to permanently remove from your deck:' : 'Choose a card to permanently upgrade:';
 
       const cardsHTML = `<div class="card-list">${STATE.run.deck.map(card => {
         const cardDef = CARDS_DB[card.defId];
@@ -9424,12 +9924,34 @@
           }
           break;
 
+        case 'buyUpgrade':
+          if (STATE.run.gold >= upgradePrice(STATE)
+              && STATE.run.deck.some(c => !c.upgraded && !isCurseCardInstance(c))) {
+            STATE.ui.picker = { purpose: 'shop-refine' };
+          }
+          break;
+
         case 'pickCard': {
           const cardUid = btn.dataset.carduid;
-          const purpose = STATE.ui.picker.purpose;
+          const pickerData = STATE.ui.picker;
+          const purpose = pickerData.purpose;
           const deckIdx = STATE.run.deck.findIndex(c => c.uid === cardUid);
           if (deckIdx !== -1) {
-            if (purpose === 'remove') {
+            if (purpose === 'transform') {
+              // Remove-and-replace, one rarity up. Deck SIZE is unchanged,
+              // which is what makes this a different tool from removal rather
+              // than a better one: removal is what a tight deck wants,
+              // transformation is what a deck full of Slashes wants, and no
+              // deck wants both. Free, because the cost IS the card — you know
+              // exactly what you give up and nothing about what you get.
+              const removed = STATE.run.deck.splice(deckIdx, 1)[0];
+              const removedDef = CARDS_DB[removed.defId] || {};
+              STATE.ui.picker = null;
+              // includeShared: false — the label promises a card "of your
+              // class", and cardPoolFor includes neutrals unless told not to.
+              grantRandomCard(STATE, TRANSFORM_UP[removedDef.rarity] || CARD_RARITIES.COMMON, { includeShared: false });
+              goTo(SCREENS.MAP);
+            } else if (purpose === 'remove') {
               // Must read the price BEFORE incrementing the counter it depends on.
               STATE.run.gold -= removalPrice(STATE);
               STATE.run.removalsThisRun++;
@@ -9440,11 +9962,34 @@
               if (!isCurseCardInstance(STATE.run.deck[deckIdx])) STATE.run.deck[deckIdx].upgraded = true;
               STATE.ui.picker = null;
               goTo(SCREENS.MAP);
-            } else if (purpose === 'purge' || purpose === 'boon') {
+            } else if (purpose === 'shop-refine') {
+              // Charged on commit, like the removal above and for the same
+              // reason: the picker is cancellable. Price read BEFORE the
+              // counter it depends on is incremented.
+              const target = STATE.run.deck[deckIdx];
+              if (!target.upgraded && !isCurseCardInstance(target)) {
+                STATE.run.gold -= upgradePrice(STATE);
+                STATE.run.upgradesThisRun++;
+                target.upgraded = true;
+              }
+              STATE.ui.picker = null;
+              goTo(SCREENS.SHOP);
+            } else if (purpose === 'purge' || purpose === 'boon' || purpose === 'event-purge') {
               // Free removals (rest-site Purge, opening boon) — no gold cost and
               // no bump to the shop's escalating removal price.
+              //
+              // 'event-purge' carries its price as DATA on the picker and pays
+              // it HERE, on commit. Charging in the event's apply() would bill
+              // the player for a screen they can still cancel out of, which is
+              // a bug with no visible cause. Data and not a closure, because
+              // ui.picker is serialised into the save.
+              const costHp = pickerData.costHp || 0;
               STATE.run.deck.splice(deckIdx, 1);
               STATE.ui.picker = null;
+              if (costHp) {
+                loseHp(STATE, costHp, 'The Lathe');
+                if (checkRunDeath(STATE)) break;
+              }
               goTo(SCREENS.MAP);
             }
           }
@@ -9454,7 +9999,14 @@
         case 'cancelPicker': {
           const purpose = STATE.ui.picker ? STATE.ui.picker.purpose : null;
           STATE.ui.picker = null;
-          goTo(purpose === 'remove' ? SCREENS.SHOP : purpose === 'boon' ? SCREENS.BOON : SCREENS.REST);
+          // Event pickers return to the MAP, never the rest site: chooseEvent
+          // has already cleared ui.eventDef and moved on, so there is no event
+          // to go back to, and the default REST branch would render a campfire
+          // the player never travelled to.
+          goTo((purpose === 'remove' || purpose === 'shop-refine') ? SCREENS.SHOP
+             : purpose === 'boon' ? SCREENS.BOON
+             : (purpose === 'event-purge' || purpose === 'transform') ? SCREENS.MAP
+             : SCREENS.REST);
           break;
         }
 
