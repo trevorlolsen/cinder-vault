@@ -1784,6 +1784,13 @@
     }
     .run-artifact .relic-tray { justify-content: center; flex-wrap: wrap; }
 
+    /* Compendium: who a relic was written for, what rarity a potion is. */
+    .compendium-scope {
+      margin-top: 4px;
+      font-size: var(--fs-sm);
+      color: var(--text-muted);
+    }
+
     .stats-box {
       background: var(--bg-dark);
       border: 1px solid var(--border-color);
@@ -2214,7 +2221,11 @@
       CARD_REWARD: 'CARD_REWARD',
       TREASURE: 'TREASURE',
       VICTORY: 'VICTORY',
-      GAMEOVER: 'GAMEOVER'
+      GAMEOVER: 'GAMEOVER',
+      // Menu-level, and the only screen that renders with no run at all. It
+      // reads the content tables and nothing else, so it cannot touch a run
+      // even by accident.
+      COMPENDIUM: 'COMPENDIUM'
     };
 
     const CARD_TYPES = { ATTACK: 'ATTACK', SKILL: 'SKILL', POWER: 'POWER', CURSE: 'CURSE' };
@@ -2302,7 +2313,11 @@
     // the whole table, so growing the table was the only way to change the offer
     // and doing so would have shown every boon at once.
     const BOON_OFFER_SIZE = 4;
-    const DEV_TOOLS = true;
+    // false for a shipped build: it gates the menu's "open the console and use
+    // CINDER_DEBUG" hint, which on a public page reads as an unfinished
+    // product. CINDER_DEBUG itself is unconditional and stays — every harness
+    // drives the game through it, so hiding the hint costs no tooling.
+    const DEV_TOOLS = false;
 
     // Each level is implemented in exactly ONE place. Levels that change a number
     // read during play keep an `ascension >= N` test at the site they affect
@@ -7975,6 +7990,9 @@
         case SCREENS.GAMEOVER:
           html = renderGameOver();
           break;
+        case SCREENS.COMPENDIUM:
+          html = renderCompendium();
+          break;
       }
 
       app.innerHTML = statusBarHTML() + html + renderInspectPanel() + overlayHTML();
@@ -8015,6 +8033,88 @@
     function describeAscension(level) {
       if (!level) return 'No ascension modifiers.';
       return ASCENSIONS.filter(a => a.level <= level).map(a => `A${a.level}: ${a.name} — ${a.desc}`).join('\n');
+    }
+
+    // Everything the vault contains, browsable without starting a run. 102
+    // cards, 34 relics and 18 potions existed and there was no way to look at
+    // any of them outside a fight — you learned the pool by being offered bits
+    // of it, which is a poor way to decide whether a class is for you.
+    //
+    // Reads the content tables only. STATE.run is null here, so cardFaceHTML
+    // gets raw defs (it normalises both) and statusBarHTML draws nothing.
+    const COMPENDIUM_TABS = [
+      ['cards', 'Cards'], ['relics', 'Relics'], ['potions', 'Potions']
+    ];
+
+    function renderCompendium() {
+      const tab = (STATE.ui && STATE.ui.compendiumTab) || 'cards';
+      const tabBtn = ([id, label]) =>
+        `<button type="button" class="help-tab${tab === id ? ' active' : ''}" data-action="compendiumTab" data-tab="${id}">${label}</button>`;
+
+      let body;
+      if (tab === 'cards') {
+        // Grouped by who can play it, then by rarity, which is the order a
+        // player thinks in when asking "what does this class do".
+        const groups = [
+          ['cinder-knight', CHARACTERS_DB['cinder-knight'].name],
+          ['plague-seer', CHARACTERS_DB['plague-seer'].name],
+          ['vault-tinker', CHARACTERS_DB['vault-tinker'].name],
+          ['SHARED', 'Neutral — any class'],
+          ['CURSE', 'Curses']
+        ];
+        const rarityOrder = { BASIC: 0, COMMON: 1, UNCOMMON: 2, RARE: 3 };
+        body = groups.map(([key, label]) => {
+          const cards = Object.values(CARDS_DB)
+            .filter(c => key === 'CURSE'
+              ? (c.type === CARD_TYPES.CURSE && !/^status-/.test(c.id))
+              : (c.type !== CARD_TYPES.CURSE && c.character === key))
+            .sort((a, b) => (rarityOrder[a.rarity] - rarityOrder[b.rarity])
+              || String(a.name).localeCompare(String(b.name)));
+          if (!cards.length) return '';
+          return `
+            <section class="shop-section">
+              <h3 class="shop-section-title">${label} (${cards.length})</h3>
+              <div class="card-list">${cards.map(c => cardFaceHTML(c, { staticFace: true })).join('')}</div>
+            </section>`;
+        }).join('');
+      } else if (tab === 'relics') {
+        const relics = Object.values(RELICS_DB).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        body = `<section class="shop-section">
+          <h3 class="shop-section-title">Relics (${relics.length})</h3>
+          <div class="card-list">${relics.map(r => {
+            const scoped = r.characters ? r.characters.map(c => (CHARACTERS_DB[c] || {}).name || c).join(', ') : '';
+            return `<button type="button" class="shop-item" ${inspectAttrs(r.name, r.description + (scoped ? `\nWritten for: ${scoped}` : ''))}>
+              <div class="shop-item-icon">${relicIcon(r.id, r.short || '')}</div>
+              <div class="shop-item-name">${r.name}</div>
+              <div class="shop-item-desc">${annotateKeywords(r.description)}</div>
+              ${scoped ? `<div class="compendium-scope">${scoped}</div>` : ''}
+            </button>`;
+          }).join('')}</div>
+        </section>`;
+      } else {
+        const potions = Object.values(POTIONS_DB).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        body = `<section class="shop-section">
+          <h3 class="shop-section-title">Potions (${potions.length})</h3>
+          <div class="card-list">${potions.map(p => `
+            <button type="button" class="shop-item" ${inspectAttrs(p.name, (p.desc || '') + (p.usableOutOfCombat ? '\nUsable outside combat.' : '\nCombat only.'))}>
+              <div class="shop-item-icon">${potionIcon(p.id)}</div>
+              <div class="shop-item-name">${p.name}</div>
+              <div class="shop-item-desc">${annotateKeywords(p.desc || '')}</div>
+              <div class="compendium-scope">${p.rarity}${p.usableOutOfCombat ? ' · map-usable' : ''}</div>
+            </button>`).join('')}</div>
+        </section>`;
+      }
+
+      return `
+        <div class="screen center-panel-screen">
+          <div class="center-panel wide">
+            <h2 class="panel-title">${icon('t-treasure','icon-title')} The Vault ${icon('t-treasure','icon-title')}</h2>
+            <div class="help-tabs">${COMPENDIUM_TABS.map(tabBtn).join('')}</div>
+            <div class="panel-content">${body}</div>
+            <button class="leave-button" data-action="returnToMenu">Back to Menu</button>
+          </div>
+        </div>
+      `;
     }
 
     function renderMenu() {
@@ -8059,7 +8159,7 @@
         <div class="screen menu-screen">
           <div class="menu-panel">
             <h1 class="menu-title">${icon('t-menu','icon-title')} THE CINDER VAULT ${icon('t-menu','icon-title')}</h1>
-            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v7</div>
+            <div class="menu-subtitle">A Text-Based Roguelike Deckbuilder · v8</div>
             ${saveButton}
             ${STATE.ui.menuNotice ? `<div class="menu-notice" role="alert">${STATE.ui.menuNotice}
               <button class="inline-chip-button" data-action="clearDeadSave">Delete that save</button></div>` : ''}
@@ -8085,6 +8185,7 @@
                 ${hasHistory ? '<button class="inline-chip-button history-open" data-action="viewHistory">Full history</button>' : ''}
                 <button class="inline-chip-button history-open" data-action="openSettings">Settings</button>
                 <button class="inline-chip-button history-open" data-action="openGlossary" data-tab="statuses">Reference</button>
+                <button class="inline-chip-button history-open" data-action="openCompendium">The Vault</button>
               </div>
             </div>
             <div class="menu-tagline">
@@ -8666,7 +8767,11 @@
             <h2 class="panel-title" id="history-title">Run History</h2>
             <div class="history-content">
               <div class="stats-box">
-                <div class="stats-box-label">Win rate by character</div>
+                <!-- meta.runs is capped at 10, so this is emphatically NOT a
+                     lifetime figure and saying "win rate by character" implied
+                     it was. The cap is deliberate (the meta store is small and
+                     unversioned); the label just has to be honest about it. -->
+                <div class="stats-box-label">Win rate by character — last 10 runs</div>
                 ${rates}
               </div>
               <div class="history-scroll">
@@ -9704,6 +9809,15 @@
 
         case 'openSettings':
           STATE.ui.settings = true;
+          break;
+
+        case 'openCompendium':
+          STATE.ui.compendiumTab = STATE.ui.compendiumTab || 'cards';
+          goTo(SCREENS.COMPENDIUM);
+          break;
+
+        case 'compendiumTab':
+          STATE.ui.compendiumTab = btn.dataset.tab || 'cards';
           break;
 
         case 'closeSettings':
