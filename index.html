@@ -2416,8 +2416,12 @@
       // RARE
       'bloodpact': {
         id: 'bloodpact', name: 'Blood Pact', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'cinder-knight',
-        exhaust: true, target: 'SELF', values: { might: 2 }, upgradedValues: { might: 3 }, hpCost: 3,
-        desc: (up) => `Lose 3 HP. Gain ${up ? 3 : 2} Might. Exhaust.`,
+        // A RARE that gave 2 Might for 1 energy, 3 HP and an Exhaust, next to
+        // Seething Rage — an UNCOMMON giving the same 2 Might for 1 energy with
+        // no HP cost and no Exhaust. This is now the burst option: the largest
+        // single Might swing in the game, paid for in blood.
+        exhaust: true, target: 'SELF', values: { might: 4 }, upgradedValues: { might: 5 }, hpCost: 3,
+        desc: (up) => `Lose 3 HP. Gain ${up ? 5 : 4} Might. Exhaust.`,
         custom: (game, target, card) => {
           const v = (card && card.upgraded) ? CARDS_DB['bloodpact'].upgradedValues : CARDS_DB['bloodpact'].values;
           loseHp(game, 3, 'Blood Pact');
@@ -2496,8 +2500,11 @@
         effects: [{ type: 'APPLY_SELF_STATUS', status: 'warded', key: 'warded' }, { type: 'BLOCK', key: 'block' }],
         desc: (up) => `Gain ${up ? 2 : 1} Warded, then gain ${up ? 14 : 10} block.`
       },
+      // Cost 1, not 0. A free Draw 3 invalidated both of the Tinker's other
+      // draw uncommons and outclassed Scout Ahead, a common that costs 1 to
+      // draw 2. It is still the reliable one — no Ethereal, no energy dump.
       'battle-trance': {
-        id: 'battle-trance', name: 'Battle Trance', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
+        id: 'battle-trance', name: 'Battle Trance', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
         target: 'SELF',
         desc: (up) => `Draw ${up ? 4 : 3} cards.`,
         custom: (game, target, card) => { drawCards(game, card && card.upgraded ? 4 : 3); }
@@ -2545,25 +2552,34 @@
           dealDamage(game, game.combat.player, target, game.combat.player.block + bonus);
         }
       },
+      // RARE, and it has to read as one. This was a byte-for-byte duplicate of
+      // Jury-Rig, an UNCOMMON in the same pool — same cost, same exhaust, same
+      // "gain 1 energy, draw 1", identical upgraded. Both were also worse than
+      // Adrenaline Surge, a BASIC starter. Three cards, one design space, two
+      // of them dead. The rare is now the big one: net +2 energy and two cards.
       'echo-chamber': {
         id: 'echo-chamber', name: 'Echo Chamber', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
         exhaust: true, target: 'SELF',
-        desc: (up) => `Gain ${up ? 2 : 1} energy and draw ${up ? 2 : 1}. Exhaust.`,
+        desc: (up) => `Gain ${up ? 4 : 3} energy and draw ${up ? 3 : 2}. Exhaust.`,
         custom: (game, target, card) => {
-          const v = card && card.upgraded ? 2 : 1;
-          game.combat.energy += v;
-          drawCards(game, v);
+          const up = card && card.upgraded;
+          game.combat.energy += up ? 4 : 3;
+          drawCards(game, up ? 3 : 2);
         }
       },
 
       // ===== v6: Cinder Knight pool (might, block, self-damage) =====
+      // 14 damage for zero energy and 2 HP was the best rate in the game by a
+      // wide margin — Execute, a RARE, deals 32 for three full energy. Three of
+      // these in hand was 42 free damage with the turn's energy still untouched,
+      // and they fed War Drums and Molten Heart for nothing on the way past.
       'reckless-blow': {
         id: 'reckless-blow', name: 'Reckless Blow', cost: 0, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.COMMON, character: 'cinder-knight',
         target: 'ENEMY_SINGLE', hpCost: 2,
-        desc: (up) => `Lose 2 HP. Deal ${up ? 18 : 14} damage.`,
+        desc: (up) => `Lose 2 HP. Deal ${up ? 14 : 10} damage.`,
         custom: (game, target, card) => {
           loseHp(game, 2, 'Reckless Blow');
-          dealDamage(game, game.combat.player, target, (card && card.upgraded) ? 18 : 14);
+          dealDamage(game, game.combat.player, target, (card && card.upgraded) ? 14 : 10);
         }
       },
       'iron-stance': {
@@ -2723,12 +2739,15 @@
           if (ctx && ctx.source && ctx.source.alive) applyPlayerStatus(game, ctx.source, 'blight', (card && card.upgraded) ? 3 : 2);
         }
       },
+      // X+2 rather than bare X. At the standard 3 energy this applied 3 Blight
+      // to all, against Toxic Cloud's 4 for two energy — the RARE lost to the
+      // UNCOMMON at every realistic energy level.
       'pestilence': {
         id: 'pestilence', name: 'Pestilence', cost: 'X', type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
         target: 'ENEMY_ALL',
-        desc: (up) => `Apply X${up ? '+2' : ''} Blight to ALL enemies.`,
+        desc: (up) => `Apply X+${up ? 4 : 2} Blight to ALL enemies.`,
         custom: (game, target, card) => {
-          const stacks = ((card && card._x) || 0) + ((card && card.upgraded) ? 2 : 0);
+          const stacks = ((card && card._x) || 0) + ((card && card.upgraded) ? 4 : 2);
           if (stacks > 0) for (const e of game.combat.enemies.filter(x => x.alive)) applyPlayerStatus(game, e, 'blight', stacks);
         }
       },
@@ -2761,15 +2780,19 @@
         effects: [{ type: 'APPLY_STATUS', status: 'sapped', key: 'sapped' }, { type: 'DRAW', value: 1 }],
         desc: (up) => `Apply ${up ? 2 : 1} Sapped. Draw 1.`
       },
+      // Was 4 block for 1 against Ratchet's 3 for 0 — a whole energy for one
+      // block. Now it is the bigger, pricier half of the pair.
       'calibrate': {
         id: 'calibrate', name: 'Calibrate', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
-        target: 'SELF', values: { block: 4 }, upgradedValues: { block: 6 },
+        target: 'SELF', values: { block: 7 }, upgradedValues: { block: 10 },
         effects: [{ type: 'BLOCK', key: 'block' }, { type: 'DRAW', value: 1 }],
-        desc: (up) => `Gain ${up ? 6 : 4} block. Draw 1.`
+        desc: (up) => `Gain ${up ? 10 : 7} block. Draw 1.`
       },
+      // Was 4 damage and Exhaust against Spring Blade's 5, Innate, no Exhaust —
+      // pure downside. One big free hit, once, is a niche; a smaller one is not.
       'pocket-shiv': {
         id: 'pocket-shiv', name: 'Pocket Shiv', cost: 0, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
-        exhaust: true, target: 'ENEMY_SINGLE', values: { dmg: 4 }, upgradedValues: { dmg: 6 },
+        exhaust: true, target: 'ENEMY_SINGLE', values: { dmg: 8 }, upgradedValues: { dmg: 11 },
         effects: [{ type: 'DAMAGE', key: 'dmg' }]
       },
       'tinker-kit': {
@@ -2777,11 +2800,14 @@
         target: 'SELF', retain: true, values: { block: 6 }, upgradedValues: { block: 8 },
         effects: [{ type: 'BLOCK', key: 'block' }]
       },
+      // X+2, not X+1: at a normal 3 energy this drew 4 for everything you had,
+      // against Battle Trance's 3 for nothing. Dumping the whole turn into
+      // cards should beat paying one energy for them.
       'overclock': {
         id: 'overclock', name: 'Overclock', cost: 'X', type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
         target: 'SELF',
-        desc: (up) => `Draw X+${up ? 2 : 1} cards.`,
-        custom: (game, target, card) => { drawCards(game, ((card && card._x) || 0) + ((card && card.upgraded) ? 2 : 1)); }
+        desc: (up) => `Draw X+${up ? 3 : 2} cards.`,
+        custom: (game, target, card) => { drawCards(game, ((card && card._x) || 0) + ((card && card.upgraded) ? 3 : 2)); }
       },
       'power-surge': {
         id: 'power-surge', name: 'Power Surge', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
@@ -2809,8 +2835,10 @@
         desc: (up) => `At the start of each turn, draw ${up ? 2 : 1} extra card${up ? 's' : ''}.`,
         onTurnStart: (game, card) => { game.combat._extraDraw = (game.combat._extraDraw || 0) + ((card && card.upgraded) ? 2 : 1); }
       },
+      // Free, but it vanishes if you do not use it — that is the trade. At 1
+      // energy for Draw 2 with Ethereal on top it was paying twice.
       'haste-gear': {
-        id: 'haste-gear', name: 'Haste Gear', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
+        id: 'haste-gear', name: 'Haste Gear', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
         target: 'SELF', ethereal: true,
         desc: (up) => `Draw ${up ? 3 : 2} cards.`,
         custom: (game, target, card) => { drawCards(game, (card && card.upgraded) ? 3 : 2); }
@@ -2830,27 +2858,35 @@
         target: 'SELF',
         desc: (up) => `The first ${up ? 'two cards' : 'card'} you play each turn resolve${up ? '' : 's'} twice.`
       },
+      // The condition is satisfied by any 0-cost block card, so the doubled
+      // number is the real number: 24 damage for 2 energy. Base comes down so
+      // the realistic line is 18, which is still the class's biggest hit.
       'piston-ram': {
         id: 'piston-ram', name: 'Piston Ram', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
         target: 'ENEMY_SINGLE',
-        desc: (up) => `Deal ${up ? 16 : 12} damage. Deals double damage if you have Block.`,
+        desc: (up) => `Deal ${up ? 13 : 9} damage. Deals double damage if you have Block.`,
         custom: (game, target, card) => {
-          const base = (card && card.upgraded) ? 16 : 12;
+          const base = (card && card.upgraded) ? 13 : 9;
           dealDamage(game, game.combat.player, target, game.combat.player.block > 0 ? base * 2 : base);
         }
       },
+      // Was 8 block against Tinker Kit's 6 — two block and Innate, for a rare
+      // slot, over a common in the same pool.
       'contingency': {
         id: 'contingency', name: 'Contingency', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
-        target: 'SELF', innate: true, retain: true, values: { block: 8 }, upgradedValues: { block: 11 },
+        target: 'SELF', innate: true, retain: true, values: { block: 12 }, upgradedValues: { block: 16 },
         effects: [{ type: 'BLOCK', key: 'block' }]
       },
 
       // ===== v6: Shared neutrals =====
+      // Heal 5 for an energy and an Exhaust lost to Cauterize (heal 4 AND 8
+      // block) and to Leech Life (heal 3, 7 damage, no Exhaust). If pure
+      // healing is all it does, the number has to be worth the card.
       'field-ration': {
         id: 'field-ration', name: 'Field Ration', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
         exhaust: true, target: 'SELF',
-        desc: (up) => `Heal ${up ? 8 : 5} HP. Exhaust.`,
-        custom: (game, target, card) => { healRun(game, (card && card.upgraded) ? 8 : 5, 'Field Ration'); }
+        desc: (up) => `Heal ${up ? 15 : 10} HP. Exhaust.`,
+        custom: (game, target, card) => { healRun(game, (card && card.upgraded) ? 15 : 10, 'Field Ration'); }
       },
       'desperate-strike': {
         id: 'desperate-strike', name: 'Desperate Strike', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
@@ -2984,11 +3020,14 @@
       },
 
       // --- Vault Tinker: +2 common, +3 uncommon, +4 rare ---
+      // Was 6 block for 1 — identical to Tinker Kit, which also has Retain, so
+      // this was strictly worse than a card in its own pool. More block now,
+      // against Tinker Kit's less-but-kept.
       'spare-plating': {
         id: 'spare-plating', name: 'Spare Plating', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
-        target: 'SELF', values: { block: 6 }, upgradedValues: { block: 9 },
+        target: 'SELF', values: { block: 8 }, upgradedValues: { block: 11 },
         effects: [{ type: 'BLOCK', key: 'block' }],
-        desc: (up) => `Gain ${up ? 9 : 6} block.`
+        desc: (up) => `Gain ${up ? 11 : 8} block.`
       },
       'ratchet': {
         id: 'ratchet', name: 'Ratchet', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'vault-tinker',
@@ -3012,13 +3051,15 @@
         effects: [{ type: 'APPLY_SELF_STATUS', status: 'warded', key: 'warded' }, { type: 'DRAW', value: 1 }],
         desc: (up) => `Gain ${up ? 3 : 2} Warded. Draw 1.`
       },
+      // The middle rung: net +1 energy AND a card, against Power Surge's bigger
+      // raw burst with no card and Echo Chamber's rare-tier version of both.
       'jury-rig': {
         id: 'jury-rig', name: 'Jury-Rig', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'vault-tinker',
         target: 'SELF', exhaust: true,
-        desc: (up) => `Gain ${up ? 2 : 1} energy. Draw ${up ? 2 : 1}. Exhaust.`,
+        desc: (up) => `Gain ${up ? 3 : 2} energy. Draw ${up ? 2 : 1}. Exhaust.`,
         custom: (game, target, card) => {
           const up = card && card.upgraded;
-          game.combat.energy += up ? 2 : 1;
+          game.combat.energy += up ? 3 : 2;
           drawCards(game, up ? 2 : 1);
         }
       },
@@ -3081,27 +3122,37 @@
       // memorised and a rare could never appear in it. Twelve now, three rare.
       // All three are conditional on purpose: an unconditionally strong neutral
       // rare would flatten the class identities it sits beside.
+      // Grace never decays, so every stack is permanent for the combat and a
+      // COMMON handing out 2 of them competed directly with Ember Plating, a
+      // Knight RARE. The upgrade now buys block, not more of the permanent
+      // engine — the block comes down to pay for the stack that remains.
       'steady-footing': {
         id: 'steady-footing', name: 'Steady Footing', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.COMMON, character: 'SHARED',
-        target: 'SELF', values: { block: 5, grace: 1 }, upgradedValues: { block: 7, grace: 2 },
+        target: 'SELF', values: { block: 4, grace: 1 }, upgradedValues: { block: 7, grace: 1 },
         effects: [{ type: 'BLOCK', key: 'block' }, { type: 'APPLY_SELF_STATUS', status: 'grace', key: 'grace' }],
-        desc: (up) => `Gain ${up ? 7 : 5} block and ${up ? 2 : 1} Grace.`
+        desc: (up) => `Gain ${up ? 7 : 4} block and 1 Grace.`
       },
+      // Was Draw 2 and 5 gold with an Exhaust, against Scout Ahead — a COMMON
+      // that draws the same 2 for the same energy and stays in the deck. Five
+      // gold, when a common card costs 55. The Exhaust now buys a real draw and
+      // real money.
       'scavenge': {
         id: 'scavenge', name: 'Scavenge', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
         target: 'SELF', exhaust: true,
-        desc: (up) => `Draw ${up ? 3 : 2}. Gain ${up ? 8 : 5} gold. Exhaust.`,
+        desc: (up) => `Draw ${up ? 4 : 3}. Gain ${up ? 25 : 15} gold. Exhaust.`,
         custom: (game, target, card) => {
           const up = card && card.upgraded;
-          drawCards(game, up ? 3 : 2);
-          game.run.gold += up ? 8 : 5;
+          drawCards(game, up ? 4 : 3);
+          game.run.gold += up ? 25 : 15;
         }
       },
+      // 15 points of value for two energy, against Shield Bash — a COMMON
+      // paying 10 for one. An uncommon should beat a common per energy.
       'measured-strike': {
         id: 'measured-strike', name: 'Measured Strike', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
-        target: 'ENEMY_SINGLE', values: { dmg: 9, block: 6 }, upgradedValues: { dmg: 12, block: 9 },
+        target: 'ENEMY_SINGLE', values: { dmg: 13, block: 9 }, upgradedValues: { dmg: 17, block: 12 },
         effects: [{ type: 'DAMAGE', key: 'dmg' }, { type: 'BLOCK', key: 'block' }],
-        desc: (up) => `Deal ${up ? 12 : 9} damage. Gain ${up ? 9 : 6} block.`
+        desc: (up) => `Deal ${up ? 17 : 13} damage. Gain ${up ? 12 : 9} block.`
       },
       'last-stand': {
         id: 'last-stand', name: 'Last Stand', cost: 2, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'SHARED',
@@ -3538,10 +3589,19 @@
         },
         onTurnStart: (game) => { game.combat._shatteredUsed = false; }
       },
+      // Capped for the same reason as Molten Heart: a deck of cheap attacks
+      // turned this into unbounded per-hit scaling by turn three.
       'war-drums': {
         id: 'war-drums', name: 'War Drums',
-        description: 'Whenever you play an attack, gain 1 Might (this combat).',
-        onCardPlayed: (game, card, def) => { if (def.type === CARD_TYPES.ATTACK) applyPlayerStatus(game, game.combat.player, 'might', 1); }
+        description: 'Whenever you play an attack, gain 1 Might (this combat, max 4).',
+        onCardPlayed: (game, card, def) => {
+          if (def.type !== CARD_TYPES.ATTACK) return;
+          const s = relicScratch(game, 'war-drums');
+          s.granted = s.granted || 0;
+          if (s.granted >= 4) return;
+          s.granted++;
+          applyPlayerStatus(game, game.combat.player, 'might', 1);
+        }
       },
       'ancient-shield': {
         id: 'ancient-shield', name: 'Ancient Shield',
@@ -3561,13 +3621,21 @@
           if (s.count % 3 === 2) game.combat._penNibPrimed = true;
         }
       },
+      // Capped. Might applies per HIT, so an uncapped stack was superlinear
+      // with multi-hit cards: a 150-damage fight paid +15 Might, and Flurry
+      // then cashed that three times a card. The cap is what keeps it a strong
+      // relic instead of the strongest thing in the pool.
       'molten-heart': {
         id: 'molten-heart', name: 'Molten Heart',
-        description: 'Every 10 damage you deal, gain 1 Might (this combat).',
+        description: 'Every 15 damage you deal, gain 1 Might (this combat, max 4).',
         onDamageDealt: (game, hpDmg) => {
           const s = relicScratch(game, 'molten-heart');
           s.accum = (s.accum || 0) + hpDmg;
-          while (s.accum >= 10) { s.accum -= 10; applyPlayerStatus(game, game.combat.player, 'might', 1); }
+          s.granted = s.granted || 0;
+          while (s.accum >= 15 && s.granted < 4) {
+            s.accum -= 15; s.granted++;
+            applyPlayerStatus(game, game.combat.player, 'might', 1);
+          }
         }
       },
       'prayer-beads': {
