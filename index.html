@@ -1635,6 +1635,16 @@
       margin-bottom: 5px;
     }
 
+    /* The shop borrows .card-list, whose track floor is --card-min (5.75rem) —
+       a width derived from fitting a ten-card hand, not from item names. At the
+       1000px minimum that left ~80px of text per cell and "Reinforce" broke
+       mid-word into "Reinfor/ce". Relic and potion names are longer than card
+       names and there are never ten of them, so the shop gets its own floor.
+       --card-min must not change: it is what sets the 1000px window minimum. */
+    .shop-section .card-list {
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    }
+
     .shop-gold { color: var(--color-gold); font-weight: bold; margin-bottom: 15px; }
     .shop-gold-note { color: var(--text-muted); font-weight: normal; }
     .shop-section { margin-bottom: 20px; }
@@ -2355,7 +2365,8 @@
       'adrenaline': {
         id: 'adrenaline', name: 'Adrenaline Surge', cost: 0, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.BASIC, character: 'SHARED',
         exhaust: true, target: 'SELF',
-        effects: [{ type: 'ENERGY', value: 1 }, { type: 'DRAW', value: 1 }]
+        values: { energy: 1, draw: 1 }, upgradedValues: { energy: 1, draw: 2 },
+        effects: [{ type: 'ENERGY', key: 'energy' }, { type: 'DRAW', key: 'draw' }]
       },
       // COMMON
       'bash': {
@@ -2378,9 +2389,9 @@
         target: 'ENEMY_SINGLE', values: { dmg: 5 }, upgradedValues: { dmg: 7 },
         desc: (up) => `Deal ${up ? 7 : 5} damage twice.`,
         custom: (game, target, card) => {
-          const damage = (card && card.upgraded) ? 7 : 5;
-          dealDamage(game, game.combat.player, target, damage);
-          if (target.alive) dealDamage(game, game.combat.player, target, damage);
+          const v = (card && card.upgraded) ? CARDS_DB['strike-twice'].upgradedValues : CARDS_DB['strike-twice'].values;
+          dealDamage(game, game.combat.player, target, v.dmg);
+          if (target.alive) dealDamage(game, game.combat.player, target, v.dmg);
         }
       },
       // UNCOMMON
@@ -2405,11 +2416,12 @@
       // RARE
       'bloodpact': {
         id: 'bloodpact', name: 'Blood Pact', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'cinder-knight',
-        exhaust: true, target: 'SELF', values: { might: 2 }, hpCost: 3,
+        exhaust: true, target: 'SELF', values: { might: 2 }, upgradedValues: { might: 3 }, hpCost: 3,
         desc: (up) => `Lose 3 HP. Gain ${up ? 3 : 2} Might. Exhaust.`,
         custom: (game, target, card) => {
+          const v = (card && card.upgraded) ? CARDS_DB['bloodpact'].upgradedValues : CARDS_DB['bloodpact'].values;
           loseHp(game, 3, 'Blood Pact');
-          applyPlayerStatus(game, game.combat.player, 'might', (card && card.upgraded) ? 3 : 2);
+          applyPlayerStatus(game, game.combat.player, 'might', v.might);
         }
       },
       'execute': {
@@ -2467,7 +2479,8 @@
         target: 'ENEMY_SINGLE', values: { dmg: 3 }, upgradedValues: { dmg: 4 },
         desc: (up) => `Deal ${up ? 4 : 3} damage three times.`,
         custom: (game, target, card) => {
-          const d = card && card.upgraded ? 4 : 3;
+          const def = CARDS_DB['flurry'];
+          const d = (card && card.upgraded ? def.upgradedValues : def.values).dmg;
           for (let i = 0; i < 3; i++) { if (target.alive) dealDamage(game, game.combat.player, target, d); }
         }
       },
@@ -2508,7 +2521,8 @@
         target: 'ENEMY_ALL', values: { dmg: 6 }, upgradedValues: { dmg: 8 },
         desc: (up) => `Deal ${up ? 8 : 6} damage to ALL enemies twice.`,
         custom: (game, target, card) => {
-          const d = card && card.upgraded ? 8 : 6;
+          const def = CARDS_DB['whirlwind'];
+          const d = (card && card.upgraded ? def.upgradedValues : def.values).dmg;
           for (let i = 0; i < 2; i++) for (const e of game.combat.enemies.filter(x => x.alive)) dealDamage(game, game.combat.player, e, d);
         }
       },
@@ -2656,9 +2670,13 @@
         id: 'catalyst-brew', name: 'Catalyst Brew', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'plague-seer',
         exhaust: true, target: 'ENEMY_SINGLE',
         desc: (up) => `${up ? 'Triple' : 'Double'} the target's Blight. Exhaust.`,
+        // applyPlayerStatus, not raw applyStatus: this is the player applying
+        // Blight to an enemy, so Plague Sigil's +1 belongs here like it does on
+        // every other Blight card. The Seer's own starting relic used to skip
+        // the Seer's own Blight-doubler.
         custom: (game, target, card) => {
           const current = target.statuses.blight || 0;
-          if (current > 0) applyStatus(target, 'blight', current * ((card && card.upgraded) ? 2 : 1));
+          if (current > 0) applyPlayerStatus(game, target, 'blight', current * ((card && card.upgraded) ? 2 : 1));
         }
       },
       'creeping-rot': {
@@ -2674,7 +2692,7 @@
         custom: (game, target, card) => {
           const up = card && card.upgraded;
           dealDamage(game, game.combat.player, target, up ? 10 : 7);
-          game.run.hp = Math.min(game.run.maxHp, game.run.hp + (up ? 4 : 3));
+          healRun(game, up ? 4 : 3, 'Leech Life');
         }
       },
       'plague-ward': {
@@ -2832,7 +2850,7 @@
         id: 'field-ration', name: 'Field Ration', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
         exhaust: true, target: 'SELF',
         desc: (up) => `Heal ${up ? 8 : 5} HP. Exhaust.`,
-        custom: (game, target, card) => { game.run.hp = Math.min(game.run.maxHp, game.run.hp + ((card && card.upgraded) ? 8 : 5)); }
+        custom: (game, target, card) => { healRun(game, (card && card.upgraded) ? 8 : 5, 'Field Ration'); }
       },
       'desperate-strike': {
         id: 'desperate-strike', name: 'Desperate Strike', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'SHARED',
@@ -3555,7 +3573,7 @@
       'prayer-beads': {
         id: 'prayer-beads', name: 'Prayer Beads',
         description: 'After each combat, heal 5 HP.',
-        onCombatEnd: (game) => { game.run.hp = Math.min(game.run.maxHp, game.run.hp + 5); }
+        onCombatEnd: (game) => { healRun(game, 5, 'Prayer Beads'); }
       },
       'hand-of-greed': {
         id: 'hand-of-greed', name: 'Hand of Greed',
@@ -5417,12 +5435,19 @@
           }
         } else if (effect.type === 'BLOCK') {
           gainBlock(game.combat.player, values[effect.key]);
+        // DRAW / ENERGY / HEAL read the values table when the effect names a
+        // key, exactly like DAMAGE and BLOCK, and fall back to a literal
+        // effect.value otherwise. Without the key path these three could not be
+        // upgraded at all, which is why every "draw 1, upgraded: draw 2" card in
+        // the file is a hand-written custom() closure — and why upgrading
+        // Adrenaline Surge, a card in two of the three starting decks, did
+        // nothing whatsoever.
         } else if (effect.type === 'DRAW') {
-          drawCards(game, effect.value);
+          drawCards(game, effect.key != null ? values[effect.key] : effect.value);
         } else if (effect.type === 'ENERGY') {
-          game.combat.energy += effect.value;
+          game.combat.energy += effect.key != null ? values[effect.key] : effect.value;
         } else if (effect.type === 'HEAL') {
-          game.run.hp = Math.min(game.run.maxHp, game.run.hp + effect.value);
+          healRun(game, effect.key != null ? values[effect.key] : effect.value, cardDef.name);
         } else if (effect.type === 'APPLY_STATUS') {
           // Fans out on ENEMY_ALL, mirroring the DAMAGE branch above.
           //
@@ -5655,7 +5680,12 @@
       let relicId = null;
       const maxHpBefore = game.run.maxHp;
       let eventRewardText = eventReward && eventReward.text ? eventReward.text : '';
-      if (isElite) {
+      // An event that stages its own fight pays what the event promised, not
+      // the elite table on top of it. Guarded Reliquary fights the Warden, who
+      // is flagged isElite, so it used to hand out the elite relic AND the
+      // event relic while the banner named one — quietly the best choice in
+      // the whole event table.
+      if (isElite && !(eventReward && eventReward.relicId)) {
         relicId = getRandomRelic(game);
         if (relicId) grantRelic(game, relicId);
         gainMaxHp(game, 2, true);
@@ -5948,6 +5978,17 @@
 
     // ============ 8. NON-COMBAT LOGIC ============
 
+    // 30% of max HP, or 20% from A7 (Cold Embers). Same reason as
+    // removalPrice(): renderRest hardcoded 30% in both the number AND the
+    // label, so from A7 the rest site advertised a heal it did not deliver.
+    function restHealAmount(game) {
+      return Math.floor(game.run.maxHp * (game.ascension >= 7 ? 0.20 : 0.30));
+    }
+
+    function restHealPercentLabel(game) {
+      return game.ascension >= 7 ? '20% of max' : '30% of max';
+    }
+
     function applyRest(game, choice) {
       const node = game.run.map.nodes.find(n => n.id === game.run.currentNodeId);
       const triggerRestRelics = () => {
@@ -5959,8 +6000,7 @@
       if (choice === 'rest') {
         // Relics can lock the campfire heal off in exchange for raw power.
         if (anyRelic(game, r => r.blocksRest)) return;
-        const heal = Math.floor(game.run.maxHp * (game.ascension >= 7 ? 0.20 : 0.30));   // A7 Cold Embers
-        healRun(game, heal, 'Rest');
+        healRun(game, restHealAmount(game), 'Rest');
         triggerRestRelics();
         goTo(SCREENS.MAP);
       } else if (choice === 'refine') {
@@ -7407,7 +7447,7 @@
     }
 
     function renderRest() {
-      const healAmt = Math.floor(STATE.run.maxHp * 0.3);
+      const healAmt = restHealAmount(STATE);
       const restBlocked = anyRelic(STATE, r => r.blocksRest);
       const canRefine = STATE.run.deck.some(c => !c.upgraded && !isCurseCardInstance(c));
       const canPurge = STATE.run.deck.length > 1;
@@ -7429,7 +7469,7 @@
             <div class="panel-content">
               <div class="panel-text">You've reached a safe place to rest. Choose one action:</div>
               ${option('rest', 'Rest',
-                restBlocked ? 'A relic denies you the campfire’s warmth.' : `Heal ${healAmt} HP (30% of max)`,
+                restBlocked ? 'A relic denies you the campfire’s warmth.' : `Heal ${healAmt} HP (${restHealPercentLabel(STATE)})`,
                 !restBlocked)}
               ${option('refine', 'Refine (Upgrade a Card)',
                 canRefine ? 'Permanently upgrade one card in your deck' : 'Every card is already upgraded',
@@ -8655,6 +8695,35 @@
           }
           if (eff.type === 'APPLY_SELF_STATUS' && card.target && card.target !== 'SELF' && !(card.effects || []).some(e => e.type === 'DAMAGE')) {
             warnings.push(`Card ${id} is ${card.target} but its only status effect is APPLY_SELF_STATUS — it buffs you, not them`);
+          }
+        }
+        // An upgrade that changes nothing. Curses are exempt — upgradeRandomCard
+        // and the rest-site picker both skip them, so they are never upgraded.
+        //
+        // This is the check that was missing when Adrenaline Surge — a card in
+        // two of the three starting decks — shipped with no upgradedValues and
+        // effects carrying literal values. Every Refine, Whetting Oil and Ashen
+        // Forge that landed on it burned for nothing, and the check above could
+        // not see it: it only fires when upgradedValues EXISTS. A card with no
+        // upgrade path at all was invisible to the linter.
+        if (card.type !== CARD_TYPES.CURSE) {
+          const bodies = [card.custom, card.desc, card.onTurnStart, card.onDamageTaken, card.onEnemyKilled, card.onCardPlayed, card.onEndTurnInHand, card.hpCost]
+            .filter(f => typeof f === 'function').map(f => f.toString()).join('\n');
+          const readsUpgradeFlag = /upgraded|\bup\b/.test(bodies);
+          const effectsScale = (card.effects || []).some(eff =>
+            eff.key != null && card.upgradedValues && card.upgradedValues[eff.key] != null);
+          if (!effectsScale && !readsUpgradeFlag) {
+            warnings.push(`Card ${id} has no upgrade path — upgrading it changes nothing (missing upgradedValues, or effects using literal values instead of keys)`);
+          }
+          // Declared-but-unread value keys. strike-twice and bloodpact both
+          // carried values tables their custom() ignored in favour of
+          // hardcoded numbers, so retuning the data moved nothing.
+          const readKeys = new Set((card.effects || []).map(eff => eff.key).filter(k => k != null));
+          const customReadsValues = /values/.test(bodies);
+          for (const key of Object.keys(card.values || {})) {
+            if (!readKeys.has(key) && !customReadsValues) {
+              warnings.push(`Card ${id} declares values.${key} but nothing reads it — retuning that number would do nothing`);
+            }
           }
         }
       }
