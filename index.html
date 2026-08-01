@@ -9032,10 +9032,26 @@
           }
           if (STATE.screen === SCREENS.COMBAT) throw new Error('Autoplay combat cap hit (turns=' + turns + ', actions=' + actions + ')');
         } else if (STATE.screen === SCREENS.CARD_REWARD) {
-          selectCardReward(STATE, null);
+          // Take the card. Passing null here meant the bot finished every run on
+          // its starting deck, so balance.mjs was comparing STARTERS, not
+          // classes — and the Cinder Knight, whose entire identity (Might,
+          // multi-hit, block-scaling) arrives via card rewards, measured worst
+          // by a wide margin while the Tinker, who opens with its draw engine
+          // already assembled, measured best.
+          const rewardChoices = STATE.ui.cardRewardChoices || [];
+          selectCardReward(STATE, rewardChoices.length ? rewardChoices[0] : null);
         } else if (STATE.screen === SCREENS.REST) {
           applyRest(STATE, STATE.run.hp < STATE.run.maxHp * 0.65 ? 'rest' : 'refine');
-          if (STATE.ui.picker) { STATE.ui.picker = null; goTo(SCREENS.MAP); }
+          // Refine opens a picker. The bot used to throw it away, so it never
+          // upgraded a card either — Refine was a wasted rest site every time.
+          if (STATE.ui.picker) {
+            if (STATE.ui.picker.purpose === 'refine') {
+              const target = STATE.run.deck.find(c => !c.upgraded && !isCurseCardInstance(c));
+              if (target) target.upgraded = true;
+            }
+            STATE.ui.picker = null;
+            goTo(SCREENS.MAP);
+          }
         } else if (STATE.screen === SCREENS.SHOP) {
           goTo(SCREENS.MAP);
         } else if (STATE.screen === SCREENS.EVENT) {
