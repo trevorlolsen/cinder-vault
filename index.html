@@ -2264,6 +2264,16 @@
       3: [[5, 0.30, 0.38], [2, 0.18, 0.18]]
     };
 
+    // How often a card-reward slot is drawn from the neutral pool rather than
+    // the run's class pool. See generateCardReward for why this exists at all.
+    const SHARED_REWARD_CHANCE = 0.20;
+
+    // Every curse in the game, for the sources that plant one at random. Named
+    // rather than derived from CARDS_DB so the status cards — which are also
+    // type CURSE, and are combat-scoped clutter rather than deck curses — can
+    // never be dealt into a permanent deck. validateContent checks each exists.
+    const CURSE_IDS = ['curse-doubt', 'curse-decay', 'curse-ballast', 'curse-tithe', 'curse-slag'];
+
     const RARITY_WEIGHTS = { COMMON: 0.6, UNCOMMON: 0.3, RARE: 0.1 };
     const ELITE_RARITY_WEIGHTS = { COMMON: 0.45, UNCOMMON: 0.35, RARE: 0.20 };
     const BOSS_RARITY_WEIGHTS = { COMMON: 0.35, UNCOMMON: 0.40, RARE: 0.25 };
@@ -2295,8 +2305,8 @@
       { level: 3, name: 'Lean Spoils', desc: 'Combat gold rewards are reduced by 15%.' },
       { level: 4, name: 'Vault Tyrant', desc: 'Bosses have 25% more HP.' },
       {
-        level: 5, name: 'Dark Burden', desc: 'Start each run with a Doubt curse.',
-        applyOnRunStart: (state) => { state.run.deck.push({ uid: uid(), defId: 'curse-doubt', upgraded: false }); }
+        level: 5, name: 'Dark Burden', desc: 'Start each run with a random curse.',
+        applyOnRunStart: (state) => { state.run.deck.push({ uid: uid(), defId: pickOne(CURSE_IDS), upgraded: false }); }
       },
       {
         level: 6, name: 'Narrow Belt', desc: 'You carry two potions instead of three.',
@@ -2360,7 +2370,7 @@
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
-    // The 217-entry path-data map lives in assets/icons.js (generated, ~293KB).
+    // The 223-entry path-data map lives in assets/icons.js (generated, ~293KB).
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
@@ -2399,7 +2409,7 @@
     const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge', 'coin-purse': 'pot-coin-purse', 'whetting-oil': 'pot-whetting', 'marrow-tonic': 'pot-marrow', 'solvent': 'pot-solvent' };
     const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem', 'censer-drone': 'e-censer-drone', 'gilded-penitent': 'e-gilded-penitent', 'ash-seraph': 'e-ash-seraph', 'oathbound': 'e-oathbound', 'reliquary-ward': 'e-reliquary-ward', 'sealed-arbiter': 'e-sealed-arbiter', 'hallowed-effigy': 'e-hallowed-effigy', 'cinder-saint': 'e-cinder-saint', 'vault-heart': 'e-vault-heart', 'saint-ashvault': 'e-saint-ashvault', 'unsworn-flame': 'e-unsworn-flame', 'slag-monarch': 'e-slag-monarch' };
     const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil' };
-    const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike' };
+    const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike', 'curse-ballast': 'c-ballast', 'curse-tithe': 'c-tithe', 'curse-slag': 'c-slag', 'pyre-ledger': 'c-pyre-ledger', 'rot-cellar': 'c-rot-cellar', 'overseer-array': 'c-overseer-array' };
     // Ids (relics + potions) that have a curated colored pixel-art raster in assets/art/icons/.
     // Any id NOT listed here falls through to the monochrome game-icons.net SVG below.
     const RASTER_ICONS = new Set([
@@ -2847,6 +2857,59 @@
           const stacks = target.statuses.blight || 0;
           delete target.statuses.blight;
           if (stacks > 0) dealDamage(game, game.combat.player, target, stacks * ((card && card.upgraded) ? 4 : 3));
+        }
+      },
+
+      // ===== v8 Phase 12: payoffs for two mechanics that had none =====
+      // Fourteen cards Exhaust and nothing anywhere read exhaustPile; thirteen
+      // Powers exist and nothing counted them. Both were free design space
+      // sitting behind engine state the game already tracked and displayed —
+      // the dock has shown an Exhaust count and a Powers count for phases.
+      //
+      // One RARE per class, because the gate asserts per-class pool symmetry
+      // and a payoff that only one class can reach is a payoff that only one
+      // class's archetype gets to exist.
+      'pyre-ledger': {
+        id: 'pyre-ledger', name: 'Pyre Ledger', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.RARE, character: 'cinder-knight',
+        target: 'ENEMY_SINGLE',
+        // The Knight exhausts more than anyone — Blood Pact, Cauterize,
+        // Reckless Blow's whole shape is spend-now — and none of it ever paid
+        // for itself. Capped so a long fight does not make this a one-card win.
+        desc: (up) => `Deal ${up ? 8 : 5} damage, plus ${up ? 4 : 3} for each card in your exhaust pile (max +${up ? 24 : 18}).`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          const per = up ? 4 : 3;
+          const bonus = Math.min(up ? 24 : 18, game.combat.exhaustPile.length * per);
+          dealDamage(game, game.combat.player, target, (up ? 8 : 5) + bonus);
+        }
+      },
+      'rot-cellar': {
+        id: 'rot-cellar', name: 'Rot Cellar', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'plague-seer',
+        target: 'ENEMY_ALL',
+        // The same resource read the other way: the Seer's exhaust pile fills
+        // with Ethereal cards it never chose to spend, and this turns that
+        // accumulated waste into the one number the class actually wants.
+        desc: (up) => `Apply 1 Blight to ALL enemies for every ${up ? 2 : 3} cards in your exhaust pile (max ${up ? 8 : 5}).`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          const stacks = Math.min(up ? 8 : 5, Math.floor(game.combat.exhaustPile.length / (up ? 2 : 3)));
+          if (stacks > 0) for (const e of game.combat.enemies.filter(x => x.alive)) applyPlayerStatus(game, e, 'blight', stacks);
+        }
+      },
+      'overseer-array': {
+        id: 'overseer-array', name: 'Overseer Array', cost: 1, type: CARD_TYPES.SKILL, rarity: CARD_RARITIES.RARE, character: 'vault-tinker',
+        target: 'SELF',
+        // The Powers payoff. The Tinker holds the most Powers of any class and
+        // nothing had ever asked how many — activePowers.length was a number on
+        // the dock and nowhere else. Capped at three, which is a real Power
+        // deck rather than an arbitrary one.
+        desc: (up) => `Gain ${up ? 8 : 6} block, plus ${up ? 8 : 6} for each Power you have active (max 3). Draw 1.`,
+        custom: (game, target, card) => {
+          const up = card && card.upgraded;
+          const per = up ? 8 : 6;
+          const powers = Math.min(3, (game.combat.activePowers || []).length);
+          gainBlock(game.combat.player, per + powers * per);
+          drawCards(game, 1);
         }
       },
 
@@ -3323,6 +3386,53 @@
         target: 'SELF', unplayable: true,
         desc: () => 'Unplayable. At the end of your turn, lose 2 HP while in hand.',
         onEndTurnInHand: (game) => { loseHp(game, 2, 'Decay'); }
+      },
+      // Two curses were dispensed by six event choices, one ascension and two
+      // enemies, so "add a curse to your deck" meant Doubt or Decay and the
+      // player had usually seen both by floor six. These three each punish a
+      // different thing, which is what makes taking one a decision about the
+      // deck you are actually holding rather than a flat tax.
+      'curse-ballast': {
+        id: 'curse-ballast', name: 'Ballast', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true, retain: true,
+        // Doubt clogs one draw and then cycles away. Ballast never leaves: it
+        // Retains, so it occupies a hand slot for the whole combat. Strictly
+        // worse than Doubt for a draw deck and barely noticeable for a deck
+        // that plays two cards a turn — the first curse whose cost depends on
+        // how you built.
+        desc: () => 'Unplayable. Retain — it never leaves your hand.'
+      },
+      'curse-tithe': {
+        id: 'curse-tithe', name: 'Tithe', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true,
+        // Taxes the shop rather than the fight. A run that never buys anything
+        // pays nothing; a run built on gold relics pays every visit. Charged at
+        // end of turn while held so it cannot be ignored by simply not drawing
+        // it, and capped at what the player actually has.
+        desc: () => 'Unplayable. At the end of your turn, lose 5 gold while in hand.',
+        onEndTurnInHand: (game) => {
+          if (game.run.gold <= 0) return;
+          const paid = Math.min(5, game.run.gold);
+          game.run.gold -= paid;
+          combatLog(game, 'foe', 'status', `Tithe takes ${paid} gold.`, { minor: true });
+        }
+      },
+      'curse-slag': {
+        id: 'curse-slag', name: 'Slag', cost: 99, type: CARD_TYPES.CURSE, rarity: CARD_RARITIES.BASIC,
+        target: 'SELF', unplayable: true,
+        // Taxes defence. Decay costs HP directly; this costs the block you were
+        // about to gain, which is worse for a Warded/Grace engine and nearly
+        // free for a deck that wins by racing.
+        //
+        // TWO stacks, and the second one is not generosity. endPlayerTurn fires
+        // onEndTurnInHand and THEN ticks the player's end-of-turn decay, and
+        // Brittle is one of the three statuses that decays there — so one stack
+        // applied here is removed microseconds later and the curse is a
+        // complete no-op. Two leaves the one that does the work. Enemy BRITTLE
+        // intents do not need this: they land during the enemy turn, after the
+        // player's decay has already run.
+        desc: () => 'Unplayable. At the end of your turn, become 2 Brittle while in hand (one decays at once).',
+        onEndTurnInHand: (game) => { applyStatus(game.combat.player, 'brittle', 2); }
       }
     };
 
@@ -3462,9 +3572,11 @@
       'mirror-thief': {
         id: 'mirror-thief', name: 'Mirror Thief', maxHp: 62, isElite: true,
         // Clogs your draw mid-fight, so a slow kill makes its own hands worse.
+        // Alternates which curse it plants: two of these in a long fight used
+        // to be two Doubts, which is one problem twice rather than two.
         getIntent: (enemy) => {
           const turn = enemy.intentIndex++;
-          if (turn % 3 === 2) return { type: 'ADD_CURSE', cardId: 'curse-doubt', value: 1 };
+          if (turn % 3 === 2) return { type: 'ADD_CURSE', cardId: turn % 6 === 2 ? 'curse-doubt' : 'curse-ballast', value: 1 };
           return parseIntentToken(turn % 3 === 0 ? 'ATK13' : 'SAPPED2');
         }
       },
@@ -3595,7 +3707,12 @@
         id: 'archlich', name: 'Arch-Lich Azaroth', maxHp: 200, isBoss: true,
         getIntent: (enemy) => {
           const turn = enemy.intentIndex++;
-          if (turn % 6 === 4) return { type: 'ADD_CURSE', cardId: 'curse-doubt', value: 1 };
+          // Escalates: the first curse it plants is inert clutter, the second
+          // costs blood, the third costs the block you were counting on.
+          if (turn % 6 === 4) {
+            const cycle = Math.floor(turn / 6) % 3;
+            return { type: 'ADD_CURSE', cardId: cycle === 0 ? 'curse-doubt' : cycle === 1 ? 'curse-decay' : 'curse-slag', value: 1 };
+          }
           const loop = enemy.hp <= enemy.maxHp * 0.5
             ? ['BLIGHT7', 'ATK-ALL15', 'BUFF_MIGHT4', 'ATK24']
             : ['ATK15', 'BLIGHT5', 'ATK-ALL12', 'BUFF_MIGHT4', 'ATK20'];
@@ -4614,6 +4731,10 @@
 
     // The card pool visible to the current run: the character's own cards plus
     // (by default) SHARED neutrals. BASIC and CURSE cards never appear.
+    // opts.onlyShared: the inverse of includeShared: false — neutrals ONLY.
+    // Card rewards use it to offer the shared pool at a low rate; without it
+    // those twelve cards were reachable almost exclusively through the shop's
+    // single neutral slot, which is 12% of CARDS_DB behind one purchase a run.
     function cardPoolFor(game, opts) {
       opts = opts || {};
       const characterId = game && game.run ? game.run.characterId : null;
@@ -4621,6 +4742,7 @@
         if (c.rarity === CARD_RARITIES.BASIC || c.type === CARD_TYPES.CURSE) return false;
         if (opts.rarity && c.rarity !== opts.rarity) return false;
         if (opts.exclude && opts.exclude.has(c.id)) return false;
+        if (opts.onlyShared) return c.character === 'SHARED';
         if (c.character === 'SHARED') return opts.includeShared !== false;
         return !characterId || c.character === characterId;
       });
@@ -6959,7 +7081,21 @@
       let guard = 0;
       while (choices.length < 3 && guard++ < 30) {
         const rarity = weightedPick(weights);
-        const cardPool = cardPoolFor(game, { rarity, exclude: used, includeShared: false });
+        // One slot in five is drawn from the neutral pool instead of the class
+        // one. Both reward paths passed includeShared: false, so the twelve
+        // rollable SHARED cards — 12% of CARDS_DB, including three rares — were
+        // reachable almost only through the shop's single neutral slot, which a
+        // run visits two or three times an act. Steady Footing, Last Stand,
+        // Ancestral Rite and Vault Breaker were effectively shop-exclusive.
+        //
+        // A fifth, not a half: the class pool is what a run is FOR, and a
+        // reward screen that keeps offering neutrals is a reward screen that
+        // stops saying anything about the character you picked.
+        const wantShared = rand() < SHARED_REWARD_CHANCE;
+        let cardPool = cardPoolFor(game, { rarity, exclude: used, onlyShared: wantShared, includeShared: false });
+        // The neutral pool is small and thins fast as `used` fills, so a miss
+        // falls back to the class pool rather than burning one of three slots.
+        if (!cardPool.length && wantShared) cardPool = cardPoolFor(game, { rarity, exclude: used, includeShared: false });
         if (cardPool.length > 0) {
           const card = cardPool[Math.floor(rand() * cardPool.length)];
           used.add(card.id);
@@ -9754,6 +9890,25 @@
               warnings.push(`Enemy ${id} getIntent has an unparseable intent token: ${m[1]}`);
             }
           }
+        }
+      }
+      // CURSE_IDS is the pool every random curse source draws from, and it is
+      // hand-written rather than derived, so it can silently drift from
+      // CARDS_DB in both directions: a curse that exists but is in no pool is
+      // content nothing can ever deal you, and an id in the pool that is not a
+      // real curse is a crash waiting for the roll that picks it.
+      for (const cid of CURSE_IDS) {
+        const def = CARDS_DB[cid];
+        if (!def) warnings.push(`CURSE_IDS names ${cid}, which is not in CARDS_DB`);
+        else if (def.type !== CARD_TYPES.CURSE) warnings.push(`CURSE_IDS names ${cid}, which is not a CURSE`);
+      }
+      for (const [id, card] of Object.entries(CARDS_DB)) {
+        // Status cards are type CURSE too, but they are combat-scoped clutter
+        // an enemy deals into your hand, not deck curses — they belong to no
+        // pool and are excluded here by their id prefix, the same way
+        // cardPoolFor's BASIC+CURSE pair already keeps them out of rewards.
+        if (card.type === CARD_TYPES.CURSE && !/^status-/.test(id) && !CURSE_IDS.includes(id)) {
+          warnings.push(`Curse ${id} is in no random-curse pool — nothing can ever deal it`);
         }
       }
       for (const [id, relic] of Object.entries(RELICS_DB)) {
