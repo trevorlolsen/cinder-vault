@@ -2255,10 +2255,13 @@
     // [fromFloor, weight, weightAtAscension2+]. Act 1's rows are the exact
     // numbers this was written with as three inline literals; Act 2 starts the
     // ramp three floors earlier and ends it higher, because by then you have a
-    // deck worth spending on a relic. Act 3+ reuses Act 2's.
+    // deck worth spending on a relic. Act 3 sits denser again: the deck is
+    // thirty-two floors old by then and an elite is the only node still paying
+    // enough to be worth the risk. Act 4+ reuses Act 3's.
     const ELITE_RAMP = {
       1: [[6, 0.18, 0.24], [3, 0.10, 0.10]],
-      2: [[5, 0.26, 0.34], [2, 0.16, 0.16]]
+      2: [[5, 0.26, 0.34], [2, 0.16, 0.16]],
+      3: [[5, 0.30, 0.38], [2, 0.18, 0.18]]
     };
 
     const RARITY_WEIGHTS = { COMMON: 0.6, UNCOMMON: 0.3, RARE: 0.1 };
@@ -2357,7 +2360,7 @@
 
     // ===== ICON INFRASTRUCTURE (injected by tools/inject-icons.mjs) =====
     // game-icons.net icons (CC BY 3.0). Values are raw SVG path 'd' strings, 512x512 viewBox.
-    // The 205-entry path-data map lives in assets/icons.js (generated, ~293KB).
+    // The 217-entry path-data map lives in assets/icons.js (generated, ~293KB).
     // Falls back to an empty map so a missing/404 file renders an ugly game rather
     // than throwing on the first icon() call and leaving a blank page.
     const ICONS = window.ICONS || {};
@@ -2381,18 +2384,20 @@
     }
     // Content -> icon key lookups.
     const NODE_ICONS = { COMBAT: 'combat', ELITE: 'elite', REST: 'rest', SHOP: 'shop', EVENT: 'event', TREASURE: 'treasure', BOSS: 'boss' };
-    const INTENT_ICONS = { ATTACK: 'int-attack', ATTACK_ALL: 'int-attack-all', BUFF_MIGHT: 'int-buff', BLOCK_INTENT: 'int-block', SAPPED: 'int-sapped', EXPOSED: 'int-exposed', BLIGHT: 'int-blight', BRITTLE: 'int-brittle', HEAL: 'int-heal', ADD_CURSE: 'int-curse', SUMMON: 'int-summon', UNKNOWN: 'int-unknown' };
+    const INTENT_ICONS = { ATTACK: 'int-attack', ATTACK_ALL: 'int-attack-all', BUFF_MIGHT: 'int-buff', BLOCK_INTENT: 'int-block', SAPPED: 'int-sapped', EXPOSED: 'int-exposed', BLIGHT: 'int-blight', BRITTLE: 'int-brittle', HEAL: 'int-heal', ADD_CURSE: 'int-curse', SUMMON: 'int-summon', WARD_SELF: 'st-warded', GRACE_SELF: 'st-grace', MEND_SELF: 'st-mending', AEGIS_SELF: 'st-aegis', UNKNOWN: 'int-unknown' };
     const STATUS_ICONS = { might: 'st-might', sapped: 'st-sapped', exposed: 'st-exposed', mending: 'st-mending', blight: 'st-blight', warded: 'st-warded', grace: 'st-grace', brittle: 'st-brittle', aegis: 'st-aegis' };
     // Module scope: read by both the enemy panel and the log's Incoming block.
     const INTENT_DESC = {
       ATTACK: 'Attacks', ATTACK_ALL: 'Attacks all', BUFF_MIGHT: 'Buffing Might',
       BLOCK_INTENT: 'Defending', SAPPED: 'Weakening you', EXPOSED: 'Exposing you',
       BLIGHT: 'Poisoning you', BRITTLE: 'Making you Brittle', HEAL: 'Healing',
-      ADD_CURSE: 'Cursing your deck', SUMMON: 'Summoning help', UNKNOWN: 'Unknown'
+      ADD_CURSE: 'Cursing your deck', SUMMON: 'Summoning help',
+      WARD_SELF: 'Warding itself', GRACE_SELF: 'Calling Grace',
+      MEND_SELF: 'Knitting itself', AEGIS_SELF: 'Sealing itself', UNKNOWN: 'Unknown'
     };
     const CARD_TYPE_ICONS = { ATTACK: 'type-attack', SKILL: 'type-skill', POWER: 'type-power', CURSE: 'type-curse' };
     const POTION_ICONS = { 'focus-tonic': 'pot-focus', 'blazing-draught': 'pot-blazing', 'second-breath': 'pot-breath', 'overcharge': 'pot-overcharge', 'vigor': 'pot-vigor', 'might-brew': 'pot-might', 'ward-flask': 'pot-ward', 'ghost-oil': 'pot-ghost', 'fire-bomb': 'pot-fire-bomb', 'blight-vial': 'pot-blight', 'fear-gas': 'pot-fear', 'snap-freeze': 'pot-freeze', 'draw-draught': 'pot-draw', 'purging-elixir': 'pot-purge', 'coin-purse': 'pot-coin-purse', 'whetting-oil': 'pot-whetting', 'marrow-tonic': 'pot-marrow', 'solvent': 'pot-solvent' };
-    const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem' };
+    const ENEMY_ICONS = { 'ooze-crawler': 'e-ooze-crawler', 'basilisk': 'e-basilisk', 'cultist': 'e-cultist', 'guardian': 'e-guardian', 'shade': 'e-shade', 'wraith': 'e-wraith', 'molten-egg': 'e-molten-egg', 'golem': 'e-golem', 'harpy': 'e-harpy', 'phantom': 'e-phantom', 'crypt-mender': 'e-crypt-mender', 'gravemaw': 'e-gravemaw', 'revenant': 'e-revenant', 'grave-summoner': 'e-grave-summoner', 'ashhound': 'e-ashhound', 'chanter': 'e-chanter', 'warden': 'e-warden', 'pyromancer': 'e-pyromancer', 'leviathan': 'e-leviathan', 'slag-titan': 'e-slag-titan', 'mirror-thief': 'e-mirror-thief', 'bonelord': 'e-bonelord', 'archlich': 'e-archlich', 'ashen-warden': 'e-ashen-warden', 'hollow-choir': 'e-hollow-choir', 'ash-vicar': 'e-ash-vicar', 'cinder-ordinator': 'e-cinder-ordinator', 'hollow-conductor': 'e-hollow-conductor', 'emberling': 'e-emberling', 'slagbeast': 'e-slagbeast', 'hollow-acolyte': 'e-hollow-acolyte', 'vault-sentinel': 'e-vault-sentinel', 'ash-swarm': 'e-ash-swarm', 'furnace-warden': 'e-furnace-warden', 'mirrorplate-golem': 'e-mirrorplate-golem', 'censer-drone': 'e-censer-drone', 'gilded-penitent': 'e-gilded-penitent', 'ash-seraph': 'e-ash-seraph', 'oathbound': 'e-oathbound', 'reliquary-ward': 'e-reliquary-ward', 'sealed-arbiter': 'e-sealed-arbiter', 'hallowed-effigy': 'e-hallowed-effigy', 'cinder-saint': 'e-cinder-saint', 'vault-heart': 'e-vault-heart', 'saint-ashvault': 'e-saint-ashvault', 'unsworn-flame': 'e-unsworn-flame', 'slag-monarch': 'e-slag-monarch' };
     const RELIC_ICONS = { 'old-locket': 'r-old-locket', 'cracked-whetstone': 'r-whetstone', 'brass-knuckles': 'r-knuckles', 'vulture-feather': 'r-feather', 'ember-charm': 'r-ember-charm', 'shattered-mind': 'r-shattered-mind', 'war-drums': 'r-drums', 'ancient-shield': 'r-ancient-shield', 'pen-nib': 'r-pen-nib', 'molten-heart': 'r-molten-heart', 'prayer-beads': 'r-beads', 'hand-of-greed': 'r-greed', 'iron-tortoise': 'r-tortoise', 'thornmail': 'r-thornmail', 'bloodstained-idol': 'r-idol', 'runic-hourglass': 'r-hourglass', 'gilded-chalice': 'r-chalice', 'plague-sigil': 'r-plague', 'deadwood-totem': 'r-deadwood', 'ember-lens': 'r-lens', 'flowing-ink': 'r-ink', 'mirror-shard': 'r-mirror', 'heavy-anchor': 'r-anchor', 'golden-needle': 'r-needle', 'war-banner': 'r-banner', 'bone-dice': 'r-dice', 'vital-ember': 'r-vital-ember', 'pocket-sundial': 'r-sundial', 'cracked-core': 'r-cracked-core', 'sunless-coil': 'r-sunless-coil' };
     const CARD_ICONS = { slash: 'c-slash', guard: 'c-guard', adrenaline: 'c-adrenaline', bash: 'c-bash', cleave: 'c-heavy-cleave', reinforce: 'c-reinforce', 'strike-twice': 'c-double-strike', overwhelm: 'c-overwhelm', recover: 'c-second-wind', brace: 'c-brace-impact', bloodpact: 'c-bloodpact', execute: 'c-execute', jab: 'c-quick-jab', 'poison-dart': 'c-poison-dart', 'shield-bash': 'c-shield-bash', sweep: 'c-wide-sweep', quickstep: 'c-quickstep', scout: 'c-scout-ahead', 'first-aid': 'c-first-aid', flurry: 'c-flurry', 'toxic-cloud': 'c-toxic-cloud', bulwark: 'c-bulwark', 'battle-trance': 'c-battle-trance', 'seething-rage': 'c-seething-rage', immolate: 'c-immolate', whirlwind: 'c-whirlwind', sanctuary: 'c-sanctuary', reckoning: 'c-reckoning', 'echo-chamber': 'c-echo-chamber', 'curse-doubt': 'c-doubt', 'curse-decay': 'c-decay', 'reckless-blow': 'c-reckless-blow', 'iron-stance': 'c-iron-stance', 'war-cry': 'c-war-cry', 'pommel-strike': 'c-pommel-strike', bloodletting: 'c-bloodletting', 'ember-plating': 'c-ember-plating', 'inner-furnace': 'c-inner-furnace', 'thorn-plate': 'c-thorn-plate', earthshatter: 'c-earthshatter', 'venom-spit': 'c-venom-spit', fester: 'c-fester', 'caustic-lash': 'c-caustic-lash', wither: 'c-wither', 'miasma-veil': 'c-miasma-veil', 'spore-burst': 'c-spore-burst', 'catalyst-brew': 'c-catalyst-brew', 'creeping-rot': 'c-creeping-rot', 'leech-life': 'c-leech-life', 'plague-ward': 'c-plague-ward', 'noxious-bloom': 'c-noxious-bloom', 'grim-harvest': 'c-grim-harvest', 'corrosive-aura': 'c-corrosive-aura', pestilence: 'c-pestilence', 'deaths-bloom': 'c-deaths-bloom', 'spring-blade': 'c-spring-blade', 'gear-throw': 'c-gear-throw', 'oil-flask': 'c-oil-flask', calibrate: 'c-calibrate', 'pocket-shiv': 'c-pocket-shiv', 'tinker-kit': 'c-tinker-kit', overclock: 'c-overclock', 'power-surge': 'c-power-surge', 'aegis-core': 'c-aegis-core', 'shock-coil': 'c-shock-coil', 'card-engine': 'c-card-engine', 'haste-gear': 'c-haste-gear', dynamo: 'c-dynamo', 'echo-loop': 'c-echo-loop', 'piston-ram': 'c-piston-ram', contingency: 'c-contingency', 'field-ration': 'c-field-ration', 'desperate-strike': 'c-desperate-strike' };
     // Ids (relics + potions) that have a curated colored pixel-art raster in assets/art/icons/.
@@ -3637,6 +3642,216 @@
           ];
           const loop = loops[verse];
           return parseIntentToken(loop[turn % loop.length]);
+        }
+      },
+
+      // The third Act 2 boss. A two-boss pool is a coin flip, and both of the
+      // existing two are ramps you can out-scale — the Warden grows an escort,
+      // the Choir grows through verses. Nothing in the act was a CLOCK. The
+      // Monarch never summons, never curses your deck and never heals: it
+      // announces a number on a two-beat rhythm that never varies, and the
+      // number climbs every cycle whether you are ready or not. Deliberately
+      // uncapped, because a stall SHOULD lose this one. It uses only existing
+      // verbs — the self-buff intents below are Act 3's signature and descending
+      // should introduce a mechanic, not a bigger number.
+      'slag-monarch': {
+        id: 'slag-monarch', name: 'The Slag Monarch', maxHp: 200, isBoss: true,
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          const cycle = Math.floor(turn / 2);
+          // The off-beat alternates armour and Brittle rather than repeating
+          // one, so the answer swaps every cycle: on a BLOCK16 turn you want
+          // the damage, on a BRITTLE3 turn you want the block you are about to
+          // be short of.
+          if (turn % 2 === 0) return parseIntentToken(cycle % 2 === 0 ? 'BLOCK16' : 'BRITTLE3');
+          return { type: 'ATTACK', value: 18 + cycle * 5 };
+        }
+      },
+
+      // --- Act 3 roster: The Reliquary ---
+      // The sealed heart of the vault, and the first act whose enemies defend
+      // themselves with anything but Block. Every body here spends turns on
+      // Grace, Warded, Mending or Aegis — four statuses that have existed since
+      // STATUS_INFO was written and that no enemy had ever once applied. That
+      // is not flavour: it is what makes a debuff card a tool rather than a
+      // slower attack, and it is the whole reason Act 3 is not Act 2 with a
+      // multiplier. Each wall has exactly one clean key the engine already
+      // implements — Blight ignores block entirely (the tick writes entity.hp
+      // directly), Blight and Mending are the same triangle pointed opposite
+      // ways, and Aegis burns one stack per debuff regardless of its size, so
+      // a 0-cost throwaway unlocks the debuff you actually care about.
+      'censer-drone': {
+        id: 'censer-drone', name: 'Censer Drone', maxHp: 30,
+        // Act 3's cheap body, and the one that states the thesis in five turns.
+        // Warded does not decay, so every block it buys after the first is
+        // worth more than the one before. Blight ignores all of it.
+        pattern: ['WARD3', 'BLOCK6', 'ATK9', 'BLOCK6', 'ATK12']
+      },
+      'gilded-penitent': {
+        id: 'gilded-penitent', name: 'Gilded Penitent', maxHp: 46,
+        // Only knits itself once it is actually hurt, so the first Mending you
+        // ever see is one you caused. Four Blight does not slow its attacks by
+        // a point — it cancels four Mending outright, which is the first time
+        // a debuff in this game answers an enemy's DEFENCE.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (enemy.hp < enemy.maxHp * 0.7 && !enemy.statuses.mending) return parseIntentToken('MEND4');
+          return parseIntentToken(turn % 3 === 2 ? 'ATK14' : 'ATK10');
+        }
+      },
+      'ash-seraph': {
+        id: 'ash-seraph', name: 'Ash Seraph', maxHp: 52,
+        // The clock, and the reason Act 3 is not a grind. Every other body here
+        // rewards patience; this one taxes it. Grace once so chip damage stops
+        // registering, Might once so the curve starts high, then a number that
+        // climbs and never blocks again. Capped at +12: an uncapped ramp on a
+        // 52 HP body is not a threat, it is a question about your draw.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (turn === 0) return parseIntentToken('GRACE3');
+          if (turn === 1) return parseIntentToken('BUFF_MIGHT3');
+          return { type: 'ATTACK', value: 11 + Math.min(12, (turn - 2) * 3) };
+        }
+      },
+      'oathbound': {
+        id: 'oathbound', name: 'The Oathbound', maxHp: 58,
+        // Re-raises its seal the moment you break it, which turns the Seer's
+        // throwaways into the key card: Venom Spit and Wither cost 0 and 1 and
+        // exist so the debuff you care about lands second. Never more than one
+        // stack — two would be the same play twice, a tax rather than a puzzle
+        // — and every turn it spends re-sealing is a turn it does not swing.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (!enemy.statuses.aegis) return parseIntentToken('AEGIS1');
+          return parseIntentToken(turn % 3 === 1 ? 'SAPPED2' : 'ATK13');
+        }
+      },
+      'reliquary-ward': {
+        id: 'reliquary-ward', name: 'Reliquary Ward', maxHp: 70,
+        // Grace and Warded compound and neither decays: Grace hands it free
+        // block every turn, Warded makes each hand-out bigger, and the pattern
+        // re-applies both on every loop. By the second cycle a deck of 6-damage
+        // attacks deals it literally nothing. That is deliberate and it has
+        // exactly two answers — one number big enough to punch through, or
+        // Blight, which never sees block at all.
+        pattern: ['GRACE3', 'ATK12', 'WARD2', 'ATK12', 'ATK16']
+      },
+      'sealed-arbiter': {
+        id: 'sealed-arbiter', name: 'The Sealed Arbiter', maxHp: 76, isElite: true,
+        // The Oathbound's lesson at elite prices: two stacks, so one throwaway
+        // is not enough and the turn has to be built around it. It wards itself
+        // on the same beat, which is why the answer is never simply "hit it
+        // harder" — Warded is block, and block is the one thing this act's
+        // walls cannot use against a status.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (!enemy.statuses.aegis) return parseIntentToken('AEGIS2');
+          if (!enemy.statuses.warded) return parseIntentToken('WARD3');
+          return parseIntentToken(turn % 3 === 1 ? 'BLOCK10' : 'ATK18');
+        }
+      },
+      'hallowed-effigy': {
+        id: 'hallowed-effigy', name: 'Hallowed Effigy', maxHp: 74, isElite: true,
+        // The first summoner in the game that also protects itself — the Grave
+        // Summoner and the Hollow Conductor both stand in the open and trust
+        // the bodies. Grace changes what the escort is FOR: the drones are not
+        // damage, they are time, and every turn spent clearing them is a turn
+        // the Effigy is paid in free block. Checks the panel cap itself so a
+        // capped Effigy picks another intent rather than spending a turn on one
+        // summonEnemy will refuse.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          if (turn === 0) return parseIntentToken('GRACE4');
+          const alive = combat.enemies.filter(e => e.alive).length;
+          if (turn % 3 === 1 && alive < MAX_ENEMY_PANELS) {
+            return { type: 'SUMMON', enemyId: 'censer-drone', value: 1 };
+          }
+          return parseIntentToken(turn % 3 === 2 ? 'ATK16' : 'ATK11');
+        }
+      },
+      'cinder-saint': {
+        id: 'cinder-saint', name: 'The Cinder Saint', maxHp: 82, isElite: true,
+        // The cleanest statement of the act's arithmetic. Mending 6 pays out
+        // 6+5+4+3+2+1 = 21 HP; Blight 6 costs exactly the same 21. They are the
+        // same triangle pointed opposite ways, which is why the counter to a
+        // healer here is a debuff rather than more damage. It hits hard enough
+        // that out-healing it loses, so the fight has one shape: out-pace the
+        // regeneration or cancel it.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (enemy.hp < enemy.maxHp * 0.85 && !enemy.statuses.mending) return parseIntentToken('MEND6');
+          const loop = ['ATK17', 'ATK17', 'BLOCK12', 'ATK23'];
+          return parseIntentToken(loop[turn % loop.length]);
+        }
+      },
+      'vault-heart': {
+        id: 'vault-heart', name: 'The Vault Heart', maxHp: 235, isBoss: true,
+        // The wall, stated at 235 HP so the player has time to notice what is
+        // happening. An attrition deck loses here on arithmetic: at 10 Grace it
+        // out-blocks a full hand of 8-damage attacks forever. Two things beat
+        // it — one enormous number, or Blight — the same pair every wall in
+        // this act has, which is the point of putting it at the end.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          const phase = enemy.hp <= enemy.maxHp * 0.33 ? 2 : enemy.hp <= enemy.maxHp * 0.66 ? 1 : 0;
+          // Grace lands ONCE per phase, latched on the instance the way the
+          // Hollow Choir latches its Rusted Gear. Re-casting from the loop
+          // would compound without bound — Grace is the one buff that never
+          // decays — and a boss whose block outgrows every deck by turn fifteen
+          // is not a wall, it is a timeout.
+          if (enemy._graced !== phase) {
+            enemy._graced = phase;
+            return parseIntentToken(phase === 2 ? 'GRACE4' : 'GRACE3');
+          }
+          // One stack only, re-raised on sight: a debuff deck pays a card a
+          // turn to keep working rather than being locked out of the fight.
+          if (!enemy.statuses.aegis) return parseIntentToken('AEGIS1');
+          const loops = [
+            ['ATK16', 'ATK16', 'EXPOSED2', 'ATK20'],
+            ['ATK22', 'BRITTLE2', 'ATK22', 'SAPPED2'],
+            ['ATK30', 'ATK30', 'BRITTLE3', 'ATK34']
+          ];
+          const loop = loops[phase];
+          return parseIntentToken(loop[turn % loop.length]);
+        }
+      },
+      'saint-ashvault': {
+        id: 'saint-ashvault', name: 'Saint Ashvault', maxHp: 215, isBoss: true,
+        // Attrition. It calls Penitents and then keeps them alive: HEAL already
+        // targets the most-wounded living ally, so every add left at half
+        // health is a turn of the Saint's you paid for. Two adds maximum, one
+        // below the panel cap, for the same reason the Ashen Warden holds two —
+        // a boss that also heals does not need a third body to be a problem.
+        getIntent: (enemy, combat) => {
+          const turn = enemy.intentIndex++;
+          const alive = combat.enemies.filter(e => e.alive).length;
+          if (turn % 4 === 1 && alive < MAX_ENEMY_PANELS - 1) {
+            return { type: 'SUMMON', enemyId: turn % 8 === 1 ? 'gilded-penitent' : 'censer-drone', value: 1 };
+          }
+          const hurt = combat.enemies.some(e => e.alive && e !== enemy && e.hp < e.maxHp * 0.7);
+          if (hurt && turn % 4 === 2) return parseIntentToken('HEAL16');
+          if (enemy.hp <= enemy.maxHp * 0.4 && !enemy.statuses.mending) return parseIntentToken('MEND6');
+          return parseIntentToken(turn % 4 === 3 ? 'ATK25' : 'ATK17');
+        }
+      },
+      'unsworn-flame': {
+        id: 'unsworn-flame', name: 'The Unsworn Flame', maxHp: 225, isBoss: true,
+        // The only enemy in the game that reads its OWN statuses. Every fourth
+        // turn it consecrates: however many KINDS of curse it carries become
+        // that many permanent Might. Nothing is negated — every stack still
+        // ticked, still cut its damage, still raised what it took — but the
+        // timing is now yours to get wrong. It counts kinds and not stacks
+        // deliberately: this asks a Blight deck to stay a Blight deck rather
+        // than punishing it for existing, and the intent panel shows the
+        // number, so the lesson costs exactly one turn.
+        getIntent: (enemy) => {
+          const turn = enemy.intentIndex++;
+          if (turn % 4 === 3) {
+            const marks = ['sapped', 'exposed', 'blight', 'brittle'].filter(s => enemy.statuses[s]).length;
+            return { type: 'BUFF_MIGHT', value: 1 + marks };
+          }
+          if (turn % 4 === 1) return parseIntentToken('AEGIS1');
+          return parseIntentToken(turn % 4 === 2 ? 'ATK24' : 'ATK18');
         }
       }
     };
@@ -5079,7 +5294,7 @@
             // Elites ramp up in the back half so taking one is a real
             // risk/reward call rather than a rare coin flip.
             const hard = !!(STATE && STATE.ascension >= 2);
-            const ramp = ELITE_RAMP[act] || ELITE_RAMP[2];
+            const ramp = ELITE_RAMP[act] || ELITE_RAMP[3];
             let eliteWeight = 0;
             if (nodeCounts.ELITE < nodeCaps.ELITE) {
               for (const [from, w, wHard] of ramp) {
@@ -5370,14 +5585,89 @@
     // impossible rather than something a filter has to remember to catch —
     // continueEndlessRun re-rolled from all four bosses, so roughly one descent in
     // four opened against the corpse you were standing on.
-    const ACT_TABLES = {
-      1: { encounters: ENCOUNTER_TABLES, elites: ELITE_TABLES, bosses: ['bonelord', 'archlich'] },
-      2: { encounters: ACT2_ENCOUNTER_TABLES, elites: ACT2_ELITE_TABLES, bosses: ['ashen-warden', 'hollow-choir'] }
+    // Act 3 is the Reliquary: the sealed heart of the vault, where everything
+    // wards itself, knits itself back together, or shrugs off the first curse
+    // you throw. It carries over four earlier bodies as escorts — the same
+    // small carry-over Act 2 took from Act 1 — but every fight's IDENTITY comes
+    // from a body that exists only here, which is the difference between a
+    // third act and a third multiplier.
+    const ACT3_ENCOUNTER_TABLES = {
+      early: [ // one new verb per fight, taught in isolation
+        ['censer-drone', 'censer-drone', 'censer-drone'],
+        ['gilded-penitent', 'censer-drone'],
+        ['ash-seraph', 'censer-drone'],
+        ['oathbound', 'ash-swarm'],
+        ['reliquary-ward'],
+        ['gilded-penitent', 'ash-seraph']
+      ],
+      mid: [ // the verbs start arriving two at a time
+        ['reliquary-ward', 'censer-drone'],
+        ['oathbound', 'gilded-penitent'],
+        ['ash-seraph', 'ash-seraph'],
+        ['gilded-penitent', 'gilded-penitent', 'censer-drone'],
+        ['reliquary-ward', 'ash-swarm', 'ash-swarm'],
+        ['oathbound', 'ash-seraph'],
+        ['gravemaw', 'censer-drone'],
+        ['ash-seraph', 'censer-drone', 'censer-drone']
+      ],
+      late: [
+        ['reliquary-ward', 'reliquary-ward'],
+        ['reliquary-ward', 'oathbound'],
+        ['ash-seraph', 'ash-seraph', 'censer-drone'],
+        ['oathbound', 'oathbound', 'censer-drone'],
+        ['gravemaw', 'gilded-penitent'],
+        ['reliquary-ward', 'ash-seraph', 'censer-drone'],
+        // Four bodies, three of them the act's cheapest — the same shape as Act
+        // 2's widest entry and for the same reason. Four bricks at these HP
+        // values would be a long fight, not a hard one.
+        ['ash-seraph', 'censer-drone', 'censer-drone', 'censer-drone'],
+        ['oathbound', 'slagbeast']
+      ]
     };
 
-    // Act 3+ has no authored content of its own, so it reuses Act 2's.
+    // Same rule as Act 1 and Act 2: an elite node must never be a smaller fight
+    // than the ordinary node beside it, and the bar is ~85% of the band's
+    // median regular encounter. Act 3's medians are 82 / 110 / 140.
+    const ACT3_ELITE_TABLES = {
+      early: [
+        ['sealed-arbiter'], ['hallowed-effigy'], ['cinder-saint'],
+        ['sealed-arbiter', 'censer-drone']
+      ],
+      mid: [
+        ['sealed-arbiter', 'gilded-penitent'],
+        ['hallowed-effigy', 'ash-swarm', 'ash-swarm'],
+        ['cinder-saint', 'ash-swarm'],
+        ['slag-titan', 'gilded-penitent'],
+        ['mirrorplate-golem', 'censer-drone'],
+        ['sealed-arbiter', 'ash-seraph'],
+        ['hallowed-effigy', 'gilded-penitent']
+      ],
+      late: [
+        ['cinder-saint', 'reliquary-ward'],
+        ['sealed-arbiter', 'oathbound'],
+        ['hallowed-effigy', 'ash-seraph'],
+        // The only two-elite encounter in the game: a seal that has to be
+        // broken, and a body that heals through everything you do while you
+        // break it. It is the last elite node before a boss and it should be.
+        ['cinder-saint', 'sealed-arbiter'],
+        ['slag-titan', 'oathbound'],
+        ['hallowed-effigy', 'oathbound', 'censer-drone'],
+        ['mirrorplate-golem', 'ash-seraph'],
+        ['sealed-arbiter', 'gilded-penitent', 'censer-drone']
+      ]
+    };
+
+    const ACT_TABLES = {
+      1: { encounters: ENCOUNTER_TABLES, elites: ELITE_TABLES, bosses: ['bonelord', 'archlich'] },
+      2: { encounters: ACT2_ENCOUNTER_TABLES, elites: ACT2_ELITE_TABLES, bosses: ['ashen-warden', 'hollow-choir', 'slag-monarch'] },
+      3: { encounters: ACT3_ENCOUNTER_TABLES, elites: ACT3_ELITE_TABLES, bosses: ['vault-heart', 'saint-ashvault', 'unsworn-flame'] }
+    };
+
+    // Act 4+ has no authored content of its own, so it reuses the DEEPEST act
+    // that does. It used to fall back to Act 2, which the moment Act 3 existed
+    // would have run the endless tail BACKWARDS into content already cleared.
     function actTables(act) {
-      return ACT_TABLES[act] || ACT_TABLES[2];
+      return ACT_TABLES[act] || ACT_TABLES[3];
     }
 
     // Act 3+ is the only case that needs the filter, because it is the only case
@@ -5890,6 +6180,24 @@
           applyStatus(enemy, 'might', intent.value);
           combatLog(game, 'foe', 'status', `${enemy.name} gains ${intent.value} Might.`);
           break;
+        // Four tokens, one branch: the status name rides on the parsed intent,
+        // so a fifth self-buff later is a line in parseIntentToken and nothing
+        // here. Until this existed, enemy self-buff was BUFF_MIGHT and BLOCK
+        // only — nothing in the game ever applied Grace, Warded, Mending or
+        // Aegis to itself, which is why four of the nine statuses had no
+        // presence on the enemy side of the board and the Plague Seer's whole
+        // debuff kit had nothing to answer.
+        //
+        // applyStatus, deliberately, not applyPlayerStatus: modifyStatusApply
+        // is the PLAYER's relic pipeline and must not fire when a foe buffs
+        // itself.
+        case 'WARD_SELF':
+        case 'GRACE_SELF':
+        case 'MEND_SELF':
+        case 'AEGIS_SELF':
+          applyStatus(enemy, intent.status, intent.value);
+          combatLog(game, 'foe', 'status', `${enemy.name} gains ${intent.value} ${statusLabel(intent.status)}.`);
+          break;
         case 'BLOCK_INTENT': {
           const before = enemy.block;
           gainBlock(enemy, intent.value);
@@ -5969,6 +6277,15 @@
         const match = token.match(regex);
         return match ? { type, value: parseInt(match[1], 10) } : null;
       };
+      // Self-buff intents carry the status name on the parsed object rather
+      // than encoding it in four near-identical executeIntent branches. Four
+      // types and not one shared BUFF_SELF because INTENT_DESC and INTENT_ICONS
+      // are keyed by type, and "Fortifying itself 3" for both Grace and Mending
+      // tells the player nothing about which of the two to answer.
+      const selfStatus = (regex, type, status) => {
+        const match = token.match(regex);
+        return match ? { type, status, value: parseInt(match[1], 10) } : null;
+      };
       return numeric(/^ATK(\d+)$/, 'ATTACK')
         || numeric(/^ATK-ALL(\d+)$/, 'ATTACK_ALL')
         || numeric(/^SAPPED(\d+)$/, 'SAPPED')
@@ -5978,6 +6295,10 @@
         || numeric(/^BUFF_MIGHT(\d+)$/, 'BUFF_MIGHT')
         || numeric(/^BLOCK(\d+)$/, 'BLOCK_INTENT')
         || numeric(/^HEAL(\d+)$/, 'HEAL')
+        || selfStatus(/^WARD(\d+)$/, 'WARD_SELF', 'warded')
+        || selfStatus(/^GRACE(\d+)$/, 'GRACE_SELF', 'grace')
+        || selfStatus(/^MEND(\d+)$/, 'MEND_SELF', 'mending')
+        || selfStatus(/^AEGIS(\d+)$/, 'AEGIS_SELF', 'aegis')
         || { type: 'UNKNOWN', value: 0, raw: token };
     }
 
@@ -6293,6 +6614,10 @@
     // regardless of who they land on — the colour says what the status IS, and
     // the anchor says who got it.
     const BUFF_STATUSES = ['might', 'warded', 'grace', 'mending', 'aegis'];
+
+    // The intent types whose payload lives in a `status` field rather than in
+    // the type itself. validateContent checks that a hand-built one supplies it.
+    const SELF_BUFF_INTENTS = ['WARD_SELF', 'GRACE_SELF', 'MEND_SELF', 'AEGIS_SELF'];
 
     function applyStatus(entity, statusName, stacks) {
       if (!entity || !entity.statuses || !statusName || !stacks) return;
@@ -7834,7 +8159,10 @@
 
         const it = enemy.intent ? enemy.intent.type : 'UNKNOWN';
         const intentIcon = intentIconFor(it);
-        const showValue = ['ATTACK','ATTACK_ALL','BUFF_MIGHT','BLOCK_INTENT','SAPPED','EXPOSED','BLIGHT','BRITTLE','HEAL','ADD_CURSE'].includes(it);
+        // A hardcoded whitelist, so a new intent type that is not added here
+        // renders an icon with a blank number beside it — which looks finished
+        // and is not, the exact failure the linter cannot see.
+        const showValue = ['ATTACK','ATTACK_ALL','BUFF_MIGHT','BLOCK_INTENT','SAPPED','EXPOSED','BLIGHT','BRITTLE','HEAL','ADD_CURSE','WARD_SELF','GRACE_SELF','MEND_SELF','AEGIS_SELF'].includes(it);
         const intentValue = showValue ? (it === 'ATTACK' || it === 'ATTACK_ALL' ? previewEnemyAttack(enemy, STATE.combat.player) : (enemy.intent.value || 1)) : '';
 
         const predicted = pendingDef ? previewCardDamage(STATE, pendingDef, pendingCard, enemy) : null;
@@ -9402,6 +9730,14 @@
           for (const m of src.matchAll(/\btype:\s*'([^']*)'/g)) {
             consumed.add(m[1]);
             if (!INTENT_DESC[m[1]]) warnings.push(`Enemy ${id} getIntent returns unknown intent type: ${m[1]}`);
+            // The self-buff family carries WHICH status on the intent object,
+            // so a hand-built one without a `status` field reaches
+            // executeIntent and calls applyStatus(enemy, undefined, n) — which
+            // returns immediately and silently. The token form (WARD3, GRACE4,
+            // MEND6, AEGIS2) always sets it; only a literal object can miss it.
+            if (SELF_BUFF_INTENTS.includes(m[1]) && !/\bstatus:\s*'/.test(src)) {
+              warnings.push(`Enemy ${id} getIntent returns ${m[1]} without a status field — it will silently do nothing (use the token form, e.g. WARD3)`);
+            }
           }
           for (const [field, db] of [['cardId', CARDS_DB], ['enemyId', ENEMIES_DB]]) {
             for (const m of src.matchAll(new RegExp('\\b' + field + ':([^,}]+)', 'g'))) {
