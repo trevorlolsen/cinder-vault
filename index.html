@@ -2388,7 +2388,7 @@
       },
       'strike-twice': {
         id: 'strike-twice', name: 'Double Strike', cost: 2, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.COMMON, character: 'cinder-knight',
-        target: 'ENEMY_SINGLE', values: { dmg: 5 }, upgradedValues: { dmg: 7 },
+        target: 'ENEMY_SINGLE', values: { dmg: 5 }, upgradedValues: { dmg: 7 }, hits: 2,
         desc: (up) => `Deal ${up ? 7 : 5} damage twice.`,
         custom: (game, target, card) => {
           const v = (card && card.upgraded) ? CARDS_DB['strike-twice'].upgradedValues : CARDS_DB['strike-twice'].values;
@@ -2482,7 +2482,7 @@
       // Uncommon
       'flurry': {
         id: 'flurry', name: 'Flurry', cost: 1, type: CARD_TYPES.ATTACK, rarity: CARD_RARITIES.UNCOMMON, character: 'cinder-knight',
-        target: 'ENEMY_SINGLE', values: { dmg: 3 }, upgradedValues: { dmg: 4 },
+        target: 'ENEMY_SINGLE', values: { dmg: 3 }, upgradedValues: { dmg: 4 }, hits: 3,
         desc: (up) => `Deal ${up ? 4 : 3} damage three times.`,
         custom: (game, target, card) => {
           const def = CARDS_DB['flurry'];
@@ -3325,8 +3325,11 @@
         id: 'grave-summoner', name: 'Grave Summoner', maxHp: 58,
         getIntent: (enemy, combat) => {
           const turn = enemy.intentIndex++;
+          // Checked here as well as in summonEnemy so a summoner at the cap
+          // picks something else rather than spending a turn on an intent the
+          // engine will refuse. summonEnemy is the backstop; this is the AI.
           const aliveAdds = combat.enemies.filter(e => e.alive).length;
-          if (turn % 3 === 1 && aliveAdds < 4) return { type: 'SUMMON', enemyId: turn % 2 === 0 ? 'wraith' : 'ashhound', value: 1 };
+          if (turn % 3 === 1 && aliveAdds < MAX_ENEMY_PANELS) return { type: 'SUMMON', enemyId: turn % 2 === 0 ? 'wraith' : 'ashhound', value: 1 };
           return parseIntentToken(turn % 3 === 2 ? 'SAPPED2' : 'ATK10');
         }
       },
@@ -3411,13 +3414,15 @@
       },
       'hollow-conductor': {
         id: 'hollow-conductor', name: 'Hollow Conductor', maxHp: 66, isElite: true,
-        // Stops at four bodies ON PURPOSE: four enemy panels are exactly what fits
-        // the 1000x660 minimum window, and a fifth turns .combat-enemies into a
-        // horizontal scroller mid-fight. grave-summoner caps at 4 for the same reason.
+        // Stops at MAX_ENEMY_PANELS bodies: four enemy panels are exactly what
+        // fits the 1000x660 minimum window, and a fifth turns .combat-enemies
+        // into a horizontal scroller mid-fight. summonEnemy enforces the same
+        // ceiling; checking here too means a capped summoner picks a different
+        // intent instead of wasting a turn on a refused one.
         getIntent: (enemy, combat) => {
           const turn = enemy.intentIndex++;
           const alive = combat.enemies.filter(e => e.alive).length;
-          if (turn % 3 === 1 && alive < 4) {
+          if (turn % 3 === 1 && alive < MAX_ENEMY_PANELS) {
             return { type: 'SUMMON', enemyId: turn % 6 === 1 ? 'wraith' : 'ash-swarm', value: 1 };
           }
           return parseIntentToken(turn % 3 === 2 ? 'EXPOSED2' : 'ATK14');
@@ -3517,8 +3522,11 @@
         // single-target decks that can't clear the adds.
         getIntent: (enemy, combat) => {
           const turn = enemy.intentIndex++;
+          // Deliberately one below MAX_ENEMY_PANELS: this is a 190 HP boss that
+          // also blocks, so it holds two adds where an ordinary summoner holds
+          // three. The disagreement is the point, not a copy-paste slip.
           const alive = combat.enemies.filter(e => e.alive).length;
-          if (turn % 4 === 1 && alive < 3) {
+          if (turn % 4 === 1 && alive < MAX_ENEMY_PANELS - 1) {
             return { type: 'SUMMON', enemyId: turn % 8 === 1 ? 'ashhound' : 'wraith', value: 1 };
           }
           if (turn % 4 === 2) return parseIntentToken('BLOCK12');
@@ -4512,6 +4520,11 @@
         game.combat.log = game.combat.log.map(e =>
           typeof e === 'string' ? { t: 0, side: 'sys', kind: 'info', text: e } : e);
       }
+      // activePowers predates v4. playCard dereferences it unguarded when it
+      // looks for Echo Loop, so a v2/v3 save resumed mid-combat threw on the
+      // first card played — the one place in the engine where an old save could
+      // still take the game down.
+      if (game.combat && !Array.isArray(game.combat.activePowers)) game.combat.activePowers = [];
       return game;
     }
 
@@ -5365,30 +5378,38 @@
 
     // ============ 7. COMBAT ENGINE ============
 
+    // One enemy, scaled for the floor, act and ascension it is being built for.
+    // startCombat and summonEnemy both used to carry their own copy of this and
+    // had already drifted: the summon path was missing both boss branches, so a
+    // summoned boss (nothing does it today, but nothing stops it either) would
+    // have come in at the wrong HP and without its A10 Might.
+    function makeEnemy(game, enemyDefId) {
+      const template = ENEMIES_DB[enemyDefId];
+      if (!template) return null;
+      let hpScale = 1 + Math.max(0, game.run.floor - 1) * 0.035;
+      if (game.ascension >= 1) hpScale += 0.10;
+      hpScale += Math.max(0, (game.act || 1) - 1) * 0.20;
+      if (template.isBoss && game.ascension >= 4) hpScale += 0.25;
+      const scaledMaxHp = Math.max(1, Math.round(template.maxHp * hpScale));
+      return {
+        uid: uid(),
+        defId: enemyDefId,
+        name: template.name,
+        hp: scaledMaxHp,
+        maxHp: scaledMaxHp,
+        block: 0,
+        // A10 Crowned in Ash: a boss that opens with Might turns every number
+        // on its intent list up, including the ones it has not shown you yet.
+        statuses: (template.isBoss && game.ascension >= 10) ? { might: 2 } : {},
+        intent: null,
+        alive: true,
+        intentIndex: 0,
+        template
+      };
+    }
+
     function startCombat(game, encounterDef) {
-      const enemies = encounterDef.enemies.map(enemyDefId => {
-        const template = ENEMIES_DB[enemyDefId];
-        let hpScale = 1 + Math.max(0, game.run.floor - 1) * 0.035;
-        if (game.ascension >= 1) hpScale += 0.10;
-        hpScale += Math.max(0, (game.act || 1) - 1) * 0.20;
-        if (template.isBoss && game.ascension >= 4) hpScale += 0.25;
-        const scaledMaxHp = Math.max(1, Math.round(template.maxHp * hpScale));
-        return {
-          uid: uid(),
-          defId: enemyDefId,
-          name: template.name,
-          hp: scaledMaxHp,
-          maxHp: scaledMaxHp,
-          block: 0,
-          // A10 Crowned in Ash: a boss that opens with Might turns every number
-          // on its intent list up, including the ones it has not shown you yet.
-          statuses: (template.isBoss && game.ascension >= 10) ? { might: 2 } : {},
-          intent: null,
-          alive: true,
-          intentIndex: 0,
-          template
-        };
-      });
+      const enemies = encounterDef.enemies.map(enemyDefId => makeEnemy(game, enemyDefId));
 
       // Innate cards surface (stably) to the top of the shuffled draw pile so
       // they land in the opening hand.
@@ -5593,8 +5614,14 @@
       // double duty on the first card each turn.
       firePowerHook(game, 'onCardPlayed', { card, def: cardDef });
 
-      // Move card
-      game.combat.hand.splice(cardIdx, 1);
+      // Move card. Re-find it by uid rather than reusing the index captured
+      // before effects ran: today every hand-mutating effect only pushes
+      // (Scout, Salvage Rig), so the old index still pointed at the right card
+      // — but Purging Elixir already sets hand = [] wholesale, and it is a
+      // potion only by luck of the draw. The first card that discards from hand
+      // would have made this splice remove a bystander.
+      const removeIdx = game.combat.hand.findIndex(c => c.uid === cardUid);
+      if (removeIdx !== -1) game.combat.hand.splice(removeIdx, 1);
       if (cardDef.type === CARD_TYPES.POWER) {
         game.combat.activePowers.push(card);
       } else if (cardDef.exhaust) {
@@ -5667,6 +5694,12 @@
     }
 
     function endPlayerTurn(game) {
+      // Relics that act as the turn closes. Fired FIRST, before the hand
+      // resolves and before end-of-turn status decay, so a relic can still see
+      // the hand it is reacting to. Empty socket as of this phase — nothing
+      // declares it yet, and an unconsumed hook is inert.
+      fireRelicHook(game, 'onTurnEnd');
+
       // In-hand end-of-turn card effects (e.g. Decay curse) run before the hand
       // resolves, so retained cards still pay their in-hand price.
       for (const card of game.combat.hand) {
@@ -5988,14 +6021,20 @@
       return !!(game && game.combat) && game.combat.enemies.every(e => e.hp <= 0 || !e.alive);
     }
 
+    // Four enemy panels is the hard rendering ceiling at the 1000x660 minimum
+    // window — a fifth turns .combat-enemies into a horizontal scroller
+    // mid-fight. That cap used to live in the DATA, as three separately
+    // copy-pasted conditions inside grave-summoner, hollow-conductor and
+    // ashen-warden's getIntent, and they did not agree: two tested `alive < 4`
+    // and one `alive < 3`. A layout constraint is the engine's business, so it
+    // is enforced here, once, for every summoner present and future.
+    const MAX_ENEMY_PANELS = 4;
+
     function summonEnemy(game, enemyDefId) {
-      const template = ENEMIES_DB[enemyDefId];
-      if (!template || !game.combat) return null;
-      let hpScale = 1 + Math.max(0, game.run.floor - 1) * 0.035;
-      if (game.ascension >= 1) hpScale += 0.10;
-      hpScale += Math.max(0, (game.act || 1) - 1) * 0.20;
-      const scaledMaxHp = Math.max(1, Math.round(template.maxHp * hpScale));
-      const enemy = { uid: uid(), defId: enemyDefId, name: template.name, hp: scaledMaxHp, maxHp: scaledMaxHp, block: 0, statuses: {}, intent: null, alive: true, intentIndex: 0, template };
+      if (!game.combat || !ENEMIES_DB[enemyDefId]) return null;
+      if (game.combat.enemies.filter(e => e.alive).length >= MAX_ENEMY_PANELS) return null;
+      const enemy = makeEnemy(game, enemyDefId);
+      if (!enemy) return null;
       // Tag the birth turn so runEnemyTurn's end-of-turn loop does not choose
       // a second intent on top of this one (it skipped pattern[0] otherwise).
       // Falsy-default: summons in old saves simply re-choose, as they used to.
@@ -6005,10 +6044,23 @@
       return enemy;
     }
 
-    function dealDamage(game, source, target, baseAmount, ctx) {
+    // THE damage pipeline. This arithmetic used to be written three times —
+    // here, in previewEnemyAttack and in previewCardDamage — with the two
+    // render-side copies kept in step with this one by hand. A preview that
+    // disagrees with what lands is worse than no preview, so there is now one
+    // function and the previews call it.
+    //
+    // Order is load-bearing: base + might -> outgoing relic modifiers ->
+    // sapped -> exposed -> incoming relic modifiers -> clamp. Math.floor at
+    // each multiply, so small numbers round harder than the percentages imply
+    // (3 damage sapped is 2, a 33% cut, not 25%).
+    //
+    // ctx.preview lets a caller ask "what would this hit for" without
+    // consuming stateful relic charges — Cracked Whetstone reads it.
+    function computeDamage(game, source, target, baseAmount, ctx) {
       ctx = ctx || {};
-      const isPlayerTarget = target === game.combat.player;
-      const sourceIsPlayer = source === game.combat.player;
+      const sourceIsPlayer = !!(game.combat && source === game.combat.player);
+      const targetIsPlayer = !!(game.combat && target === game.combat.player);
 
       // Might is a property of swung attacks. Reactive damage (Thornmail,
       // Thorn Plate) already skips the attack relic modifiers below; it skips
@@ -6019,12 +6071,29 @@
       // Player attack damage modifiers (Brass Knuckles, Cracked Whetstone, ...).
       // Thorns/reactive damage is not an "attack" and skips these.
       if (sourceIsPlayer && !ctx.thorns) {
-        amount = applyRelicModifier(game, 'modifyOutgoingDamage', amount, { isAttack: ctx.isAttack !== false, target });
+        amount = applyRelicModifier(game, 'modifyOutgoingDamage', amount, { isAttack: ctx.isAttack !== false, target, preview: !!ctx.preview });
       }
 
       if (source.statuses.sapped) amount = Math.floor(amount * 0.75);
       if (target.statuses.exposed) amount = Math.floor(amount * 1.5);
-      amount = Math.max(0, amount);
+
+      // Incoming modifiers: a relic that reduces what the PLAYER takes. Empty
+      // socket as of this phase — nothing declares it yet, and an unconsumed
+      // hook is inert. It exists so "take 25% less damage" is a data entry
+      // rather than an edit to this function.
+      if (targetIsPlayer) {
+        amount = applyRelicModifier(game, 'modifyIncomingDamage', amount, { source, preview: !!ctx.preview });
+      }
+
+      return Math.max(0, amount);
+    }
+
+    function dealDamage(game, source, target, baseAmount, ctx) {
+      ctx = ctx || {};
+      const isPlayerTarget = target === game.combat.player;
+      const sourceIsPlayer = source === game.combat.player;
+
+      const amount = computeDamage(game, source, target, baseAmount, ctx);
 
       // Block absorbs first; leftover block persists.
       const blocked = Math.min(target.block, amount);
@@ -6080,6 +6149,14 @@
       let total = amount + (statuses.warded || 0);
       // Brittle cuts the whole gain (after Warded) by 25%.
       if (statuses.brittle) total = Math.floor(total * 0.75);
+      // Relics that scale block. Player only — an enemy gaining block is not
+      // the player's relic's business. Empty socket as of this phase; it exists
+      // so "your block is 50% stronger" is a data entry rather than an edit
+      // here. gainBlock takes no `game`, by long-standing signature, so it uses
+      // the same STATE reference the FX line below already does.
+      if (STATE && STATE.combat && entity === STATE.combat.player) {
+        total = Math.max(0, applyRelicModifier(STATE, 'modifyBlockGain', total, { base: amount }));
+      }
       entity.block += total;
       // Shield-orb feedback only when the player gains block (not enemies, not combat-start relics before render).
       if (STATE && STATE.combat && entity === STATE.combat.player) playEffect('player', 'block');
@@ -7179,29 +7256,36 @@
       </div>`;
     }
 
+    // Both previews go through computeDamage, so the number on screen is the
+    // number that lands, by construction rather than by matching maintenance.
     function previewEnemyAttack(enemy, player) {
       if (!enemy.intent || (enemy.intent.type !== 'ATTACK' && enemy.intent.type !== 'ATTACK_ALL')) return '';
-      let amount = enemy.intent.value + (enemy.statuses.might || 0);
-      if (enemy.statuses.sapped) amount = Math.floor(amount * 0.75);
-      if (player.statuses.exposed) amount = Math.floor(amount * 1.5);
-      return Math.max(0, amount);
+      return computeDamage(STATE, enemy, player, enemy.intent.value, { preview: true });
     }
 
-    // What the selected card would hit `enemy` for, mirroring dealDamage's order
-    // of operations. Returns null for cards whose damage comes from a custom()
-    // function (multi-hit, block-scaling, Blight-consuming, ...) — better to show
-    // nothing than a number the engine won't honour.
+    // What the selected card would hit `enemy` for. Returns null for cards
+    // whose damage comes from a custom() function (block-scaling,
+    // Blight-consuming, ...) — better to show nothing than a number the engine
+    // won't honour. Multi-hit cards are the exception: they declare `hits`, and
+    // the preview reports the per-hit figure with the count beside it.
     function previewCardDamage(game, cardDef, card, enemy) {
-      if (!cardDef || !cardDef.effects) return null;
-      const dmgEffect = cardDef.effects.find(e => e.type === 'DAMAGE');
-      if (!dmgEffect) return null;
-      const values = (card.upgraded && cardDef.upgradedValues) ? cardDef.upgradedValues : (cardDef.values || {});
-      let amount = (dmgEffect.key != null ? values[dmgEffect.key] : dmgEffect.value) || 0;
-      amount += (game.combat.player.statuses.might || 0);
-      amount = applyRelicModifier(game, 'modifyOutgoingDamage', amount, { isAttack: true, target: enemy, preview: true });
-      if (game.combat.player.statuses.sapped) amount = Math.floor(amount * 0.75);
-      if (enemy.statuses.exposed) amount = Math.floor(amount * 1.5);
-      return Math.max(0, amount);
+      if (!cardDef) return null;
+      let base = null;
+      if (cardDef.effects) {
+        const dmgEffect = cardDef.effects.find(e => e.type === 'DAMAGE');
+        if (dmgEffect) {
+          const values = (card.upgraded && cardDef.upgradedValues) ? cardDef.upgradedValues : (cardDef.values || {});
+          base = (dmgEffect.key != null ? values[dmgEffect.key] : dmgEffect.value) || 0;
+        }
+      }
+      // A custom() card can still be previewable if it declares hits + values:
+      // its per-hit damage is data, the loop around it is not.
+      if (base == null && cardDef.hits) {
+        const values = (card.upgraded && cardDef.upgradedValues) ? cardDef.upgradedValues : (cardDef.values || {});
+        if (values.dmg != null) base = values.dmg;
+      }
+      if (base == null) return null;
+      return computeDamage(game, game.combat.player, enemy, base, { isAttack: true, preview: true });
     }
 
     function attrEscape(value) {
@@ -7505,9 +7589,12 @@
         const intentValue = showValue ? (it === 'ATTACK' || it === 'ATTACK_ALL' ? previewEnemyAttack(enemy, STATE.combat.player) : (enemy.intent.value || 1)) : '';
 
         const predicted = pendingDef ? previewCardDamage(STATE, pendingDef, pendingCard, enemy) : null;
-        const lethal = predicted != null && predicted >= enemy.hp + enemy.block;
+        // Multi-hit cards report per-hit damage; the lethality test has to use
+        // the total or a Flurry that clearly kills would not say so.
+        const hits = (pendingDef && pendingDef.hits) || 1;
+        const lethal = predicted != null && predicted * hits >= enemy.hp + enemy.block;
         const previewHTML = predicted != null
-          ? `<div class="dmg-preview ${lethal ? 'lethal' : ''}">${lethal ? 'LETHAL' : `−${predicted}`}</div>`
+          ? `<div class="dmg-preview ${lethal ? 'lethal' : ''}">${lethal ? 'LETHAL' : `−${predicted}${hits > 1 ? `&nbsp;×${hits}` : ''}`}</div>`
           : '';
 
         // Always a <button>, never `disabled` — the action swaps instead. Two
@@ -8768,6 +8855,15 @@
     // key", not "skip the catch".
     function handleKeydown(e) {
       if (!STATE) return;
+      // Typing into a field is typing, not a shortcut. Without this, entering a
+      // seed containing '?' opened the reference overlay, and 'd' would have
+      // opened the deck if the seed box ever accepted letters. Escape still
+      // works everywhere — it is how you back out of the field.
+      const el = e.target;
+      if (el && e.key !== 'Escape' &&
+          (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) {
+        return;
+      }
       if (e.key === 'Escape') {
         // Dismiss order mirrors overlayHTML()'s stacking order: whatever is on
         // top goes first, so Esc always closes the thing you are looking at.
@@ -8846,7 +8942,10 @@
     function validateContent() {
       const warnings = [];
       const knownTargets = ['SELF', 'ENEMY_SINGLE', 'ENEMY_ALL'];
-      const knownCardFields = ['id', 'name', 'cost', 'type', 'rarity', 'target', 'values', 'upgradedValues', 'effects', 'custom', 'desc', 'exhaust', 'unplayable', 'ethereal', 'retain', 'innate', 'onEndTurnInHand', 'character', 'onTurnStart', 'onDamageTaken', 'onEnemyKilled', 'onCardPlayed', 'hpCost'];
+      // `hits` declares how many times a custom() card swings, so the damage
+      // preview can report "-4 x3" instead of giving up. It is display data:
+      // the loop that actually deals the damage lives in the custom().
+      const knownCardFields = ['id', 'name', 'cost', 'type', 'rarity', 'target', 'values', 'upgradedValues', 'effects', 'custom', 'desc', 'exhaust', 'unplayable', 'ethereal', 'retain', 'innate', 'onEndTurnInHand', 'character', 'onTurnStart', 'onDamageTaken', 'onEnemyKilled', 'onCardPlayed', 'hpCost', 'hits'];
       const validCharacters = Object.keys(CHARACTERS_DB).concat(['SHARED']);
       for (const [id, card] of Object.entries(CARDS_DB)) {
         if (id !== card.id) warnings.push(`Card key/id mismatch: ${id}`);
